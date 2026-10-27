@@ -1,0 +1,1413 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- cabecera de documento para abrir index.html desde el disco (sin ella: modo quirks y sin escala en móvil); al publicar el artefacto pone la suya -->
+<style>[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Simulador WH3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+/* Layout: pantalla de juego oscura; barra superior con migas, vistas apiladas (facción → personaje → árbol). Árbol en filas por categoría con scroll horizontal propio; panel de detalle a la derecha (abajo en móvil). Tema único oscuro a propósito, como la interfaz del juego. */
+:root{
+  --bg:#121010; --panel:#1d1915; --panel2:#26201a; --line:#4a3d2c; --gold:#c9a45c; --gold2:#e8cf8f; --silver:#b9c0c8;
+  --text:#e6dccb; --muted:#a39580; --good:#8fd16a; --bad:#e2665a; --char:#FFB62F; --battle:#F1413D; --camp:#43DDF8;
+  --display:"IM Fell English SC","Palatino Linotype",Georgia,serif; --body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.45 var(--body);
+  background-image:radial-gradient(ellipse at 50% -20%,#2b2117 0,transparent 60%),repeating-linear-gradient(45deg,rgba(255,255,255,.012) 0 2px,transparent 2px 6px)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,.node:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:linear-gradient(#241d16,#1a1511);border-bottom:1px solid var(--line);box-shadow:0 2px 0 #0008}
+header.top .wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-block:10px}
+.brand{font:22px/1 var(--display);color:var(--gold2);letter-spacing:.02em;white-space:nowrap}
+.crumbs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:14px;min-width:0}
+.crumbs button{background:none;border:0;padding:2px 4px;color:var(--gold);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.crumbs span.sep{opacity:.5}
+.patch{margin-left:auto;font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+main{padding-block:18px 40px}
+h1,h2,h3{font-family:var(--display);font-weight:400;color:var(--gold2);text-wrap:balance;margin:0}
+h1{font-size:30px} h2{font-size:22px} h3{font-size:17px}
+.frame{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);box-shadow:inset 0 0 0 1px #000,inset 0 0 0 2px #3a2f22;border-radius:3px}
+.muted{color:var(--muted)}
+.lbl{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+
+/* ---- facciones ---- */
+.search{display:flex;gap:10px;align-items:center;margin:12px 0 18px;flex-wrap:wrap}
+.search input{flex:1 1 260px;min-width:0;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:2px;font:inherit}
+.race{margin-bottom:22px}
+.race>h2{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:20px}
+.race>h2::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.card{display:flex;gap:12px;align-items:center;text-align:left;padding:10px 12px;cursor:pointer;border:1px solid var(--line);background:linear-gradient(180deg,#2a221b,#1c1814);border-radius:3px;transition:border-color .15s,transform .15s}
+.card:hover{border-color:var(--gold);transform:translateY(-1px)}
+.card .t{min-width:0}
+.card .n{font-family:var(--display);font-size:17px;color:var(--gold2);line-height:1.15}
+.card .s{font-size:13px;color:var(--muted)}
+.crest{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font:20px var(--display);color:#fff;border:2px solid var(--gold);box-shadow:0 0 0 2px #000,inset 0 0 10px #0009;text-shadow:0 1px 2px #000}
+img.crest{width:54px;height:54px;border:0;border-radius:0;box-shadow:none;object-fit:contain;filter:drop-shadow(0 2px 3px #000b)}
+img.crest.face{width:42px;height:91px;border:2px solid var(--silver);border-radius:3px;box-shadow:0 0 0 1px #000;object-fit:cover;filter:none;background:#000}
+img.crest.face.leg,.portrait img.crest.full.leg{border-color:var(--gold2);box-shadow:0 0 0 2px #000,0 0 8px #c9a45c99}
+.crest.com{border-color:var(--silver)}
+
+/* ---- personajes ---- */
+.fhead{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;padding:16px;margin-bottom:16px}
+.fhead .crest{width:64px;height:64px;font-size:28px}
+.fx-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:10px}
+.fxbox h3{margin-bottom:6px}
+ul.fx{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+ul.fx li{font-size:14px;padding-left:14px;position:relative}
+ul.fx li::before{content:"◆";position:absolute;left:0;top:1px;font-size:9px;color:var(--gold)}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.scope{color:var(--muted);font-size:12px}
+.tabs{display:flex;gap:4px;margin:6px 0 12px;border-bottom:1px solid var(--line)}
+.tabs button{background:none;border:1px solid transparent;border-bottom:0;padding:8px 16px;cursor:pointer;font:18px var(--display);color:var(--muted);border-radius:3px 3px 0 0}
+.tabs button[aria-selected="true"]{color:var(--gold2);border-color:var(--line);background:var(--panel2);margin-bottom:-1px}
+.tag{display:inline-block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:2px;border:1px solid var(--line);color:var(--muted)}
+.tag.leg{color:#1a1208;background:var(--gold);border-color:var(--gold2)}
+.tag.conf{color:#cfe3f0;border-color:#4d7894;background:#1c2c38}
+.grp{display:grid;gap:8px;margin-bottom:18px}
+.grp .note{margin:0;font-size:13px}
+
+/* ---- árbol ---- */
+.sim{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px;align-items:start}
+.simmain{display:grid;gap:14px;min-width:0}
+.sheet{padding:14px;display:grid;gap:12px;position:sticky;top:70px}
+.portrait{display:flex;gap:12px;align-items:center}
+.card.info{cursor:default;opacity:.8}.card.info:hover{transform:none}
+.evo{display:grid;gap:6px}.evob{display:flex;gap:8px;align-items:center;text-align:left;background:#0d0b0966;border:1px solid var(--line);border-radius:3px;padding:4px 6px;color:inherit;font:inherit;cursor:pointer}
+.evob:hover{border-color:var(--gold)}.evob small{color:var(--muted)}.evob img,.evob .crest{max-height:48px}
+.portrait .crest{width:58px;height:58px;font-size:26px}
+.portrait img.crest.full{width:72px;height:156px;border-radius:3px;object-fit:cover;border:2px solid var(--silver);box-shadow:0 0 0 2px #000;filter:none;background:#000}
+.rankbox{display:grid;gap:6px;justify-items:center;text-align:center;padding:10px;border:1px solid var(--line);border-radius:3px;background:#0d0b0999}
+.rankbox .lbl{color:var(--gold);font-size:13px}
+.lvnum{display:flex;align-items:baseline;gap:6px;line-height:1}
+.lvnum output{font:44px/1 var(--display);color:var(--gold2);text-shadow:0 0 12px #c9a45c66;font-variant-numeric:tabular-nums}
+.lvnum span{font:18px var(--display);color:var(--muted)}
+.rankbox .lvbar{width:100%;flex:none}
+.rankrow{display:flex;align-items:center;gap:8px}
+.lvbar{flex:1;height:8px;border-radius:4px;background:#0d0b09;border:1px solid var(--line);overflow:hidden}
+.lvbar span{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));transition:width .15s}
+.rankrow output{font:22px var(--display);color:var(--gold2);min-width:2ch;text-align:right;font-variant-numeric:tabular-nums}
+.pts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pts div{background:#0d0b09;border:1px solid var(--line);padding:6px 8px;border-radius:2px}
+.pts b{display:block;font:22px var(--display);color:var(--gold2);font-variant-numeric:tabular-nums}
+.pts .over b{color:var(--bad)}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btn{background:linear-gradient(#4a3a26,#2d2318);border:1px solid var(--gold);color:var(--gold2);padding:7px 12px;border-radius:2px;cursor:pointer;font-size:14px}
+.btn:hover{filter:brightness(1.2)} .btn.ghost{background:none;border-color:var(--line);color:var(--text)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.copied{font-size:13px;color:var(--good)}
+.tlist{max-height:320px;overflow-y:auto;display:grid;gap:4px;margin-top:4px}
+.topt{display:flex;gap:8px;align-items:flex-start;padding:5px 6px;border:1px solid var(--line);border-radius:2px;cursor:pointer}
+.topt.on{border-color:var(--gold);background:var(--panel2)}
+.topt input{margin-top:3px;accent-color:var(--gold)}
+.topt ul.fx li{font-size:13px}
+.linkbox{width:100%;font:12px ui-monospace,monospace;background:#0d0b09;color:var(--muted);border:1px solid var(--line);padding:6px;border-radius:2px}
+.saved{display:grid;gap:4px;max-height:180px;overflow:auto}
+.saved div{display:flex;gap:6px;align-items:center;font-size:13px}
+.saved div button.l{flex:1;text-align:left;background:none;border:0;color:var(--gold);cursor:pointer;padding:2px 0;text-decoration:underline;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.saved div button.x{background:none;border:0;color:var(--muted);cursor:pointer}
+
+/* ---- árbol con el aspecto del juego: placas, marcos, flechas e iconos sacados de ui.pack (ui_juego.js, iconos_hab.js) ---- */
+.tree{padding:0;min-width:0;overflow:hidden;position:relative;--gfont:"Libre Caslon Text","Palatino Linotype",Georgia,serif;
+  background:radial-gradient(ellipse 60% 70% at 20% 30%,#262a3a55,transparent 70%),radial-gradient(ellipse 50% 60% at 85% 75%,#2a2d3c44,transparent 70%),linear-gradient(180deg,#14151d,#0d0e14)}
+.tbar{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid #2a2c38;background:#0b0c11cc;font-size:12px;color:var(--muted)}
+.tbar .zoom{margin-left:auto;display:flex;align-items:center;gap:4px}
+.tbar .zoom button{background:#1b1d27;border:1px solid #3a3d4e;color:var(--text);width:26px;height:24px;border-radius:2px;cursor:pointer;line-height:1}
+.tbar .zoom output{min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.treescroll{overflow:auto;max-height:calc(100vh - 150px);padding:0;cursor:grab;user-select:none;-webkit-user-select:none}
+.treescroll.dragging,.treescroll.dragging .sk{cursor:grabbing}
+.gtree{position:relative;zoom:var(--z,1)}
+.gbox{position:absolute;background:linear-gradient(180deg,#0f1420a8,#0b0f18c0);border:1px solid #3b5470;box-shadow:inset 0 0 0 1px #0008,inset 0 0 24px #0009,0 0 0 1px #0006;pointer-events:none}
+.gbox.on{border-color:#4f7ba3}
+.gbox .need{position:absolute;right:6px;top:3px;font:12px/1 var(--gfont);color:#9fb6cc;text-shadow:0 1px 2px #000}
+.gbox.ok .need{color:#b9e87a}
+svg.glinks{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.rowlab{position:absolute;left:4px;width:22px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);font:13px var(--display);letter-spacing:.14em;text-transform:uppercase;color:#8d8270;pointer-events:none;opacity:.85}
+.sk{position:absolute;width:224px;height:67px;padding:0;border:0;background:none;cursor:pointer;color:#FFF8D7;--c:#FFB62F;font:inherit;text-align:left}
+.sk:focus-visible{outline:2px solid var(--gold2);outline-offset:4px}
+.sk .pl,.sk .orn{position:absolute;top:0;pointer-events:none}
+.sk .pl{left:35px;width:185px;height:67px;background-color:var(--c);background-image:var(--t-plate);background-blend-mode:multiply;background-size:100% 100%;
+  -webkit-mask:var(--t-plate) 0 0/100% 100%;mask:var(--t-plate) 0 0/100% 100%;transition:filter .12s}
+.sk:hover .pl{background-image:var(--t-plate-hover);-webkit-mask-image:var(--t-plate-hover);mask-image:var(--t-plate-hover)}
+.sk.taken .pl{background-image:var(--t-plate-sel);-webkit-mask-image:var(--t-plate-sel);mask-image:var(--t-plate-sel)}
+.sk.taken:hover .pl{background-image:var(--t-plate-sel-hover);-webkit-mask-image:var(--t-plate-sel-hover);mask-image:var(--t-plate-sel-hover)}
+.sk .orn{left:0;width:220px;height:67px;background:var(--t-orn) 0 0/100% 100% no-repeat}
+.sk .ic{position:absolute;left:31px;top:-3px;width:72px;height:72px;pointer-events:none;filter:drop-shadow(0 2px 3px #000a)}
+.sk .ic.pend{opacity:0}
+.sk .nm{position:absolute;left:92px;width:118px;top:5px;height:57px;display:flex;align-items:center;justify-content:center;text-align:center;
+  font:18px/1 var(--gfont);letter-spacing:-.01em;text-shadow:0 1px 2px #000,0 0 6px #000c;pointer-events:none;overflow:hidden}
+.sk .nm.s{font-size:16px} .sk .nm.xs{font-size:14px;line-height:1.02}
+.sk .lvs{position:absolute;left:206px;top:0;height:67px;display:flex;flex-direction:column;justify-content:center;gap:0;pointer-events:none}
+.sk .lvs i{display:block;width:15px;height:18px;margin:-1px 0;background:var(--t-lvl-off) center/contain no-repeat}
+.sk .lvs i.on{background:var(--c);-webkit-mask:var(--t-lvl-lit) center/contain no-repeat;mask:var(--t-lvl-lit) center/contain no-repeat;filter:brightness(1.35) drop-shadow(0 0 3px var(--c))}
+.sk .ck{position:absolute;left:180px;top:32px;width:48px;height:48px;background:var(--t-check) center/contain no-repeat;pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
+.sk .pad{position:absolute;left:24px;top:38px;width:24px;height:30px;background:var(--t-padlock) center/contain no-repeat;pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
+.sk .rq{position:absolute;left:44px;top:47px;min-width:22px;height:18px;padding:0 4px;border-radius:9px;background:#0b0c10e6;border:1px solid #6d6a62;font:12px/16px var(--gfont);text-align:center;color:#e9e1cf;pointer-events:none}
+.sk .chn{position:absolute;left:4px;top:-3px;width:135px;height:72px;background:var(--t-chains) center/contain no-repeat;pointer-events:none;opacity:.95}
+.sk .au{position:absolute;left:84px;top:-6px;width:26px;height:26px;background:var(--t-auto) center/contain no-repeat;pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
+.sk .gt{position:absolute;left:24px;top:-8px;padding:0 5px;height:18px;border-radius:2px;background:#3a1512e6;border:1px solid #a14b3c;font:700 11px/16px var(--body);color:#f3c5b5;pointer-events:none}
+.sk.lock .pl,.sk.lock .ic{filter:brightness(.8) saturate(.85)}
+.sk.norank .ic,.sk.excl .ic{filter:grayscale(1) brightness(.6)}
+.sk.norank .nm,.sk.excl .nm{color:#a9a49a}
+.sk.avail:hover .ic,.sk.taken:hover .ic{filter:drop-shadow(0 0 6px var(--c)) brightness(1.08)}
+.sk.sel .pl{filter:brightness(1.18) drop-shadow(0 0 5px #fff6)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+/* tooltip como el del juego (tooltip_frame.png) */
+.gtt{position:fixed;z-index:50;width:min(440px,calc(100vw - 16px));pointer-events:none;color:#ece6d6;font:15px/1.3 var(--gfont);
+  border:12px solid transparent;border-image:var(--t-tt) 12 fill / 12px stretch;padding:4px 6px 10px;box-shadow:0 8px 30px #000c}
+.gtt::after{content:"";position:absolute;left:-6px;right:-6px;bottom:-6px;height:46px;background:radial-gradient(ellipse 70% 100% at 50% 100%,#1f6b9a66,transparent 75%);pointer-events:none}
+.gtt h4{margin:0 0 2px;font:700 19px/1.2 var(--gfont);text-align:center;color:#fff}
+.gtt .sub{text-align:center;font-size:12px;color:#b9ad95;margin-bottom:6px}
+.gtt .fl{font-style:italic;color:#cfc8b8;margin:0 0 8px}
+.gtt .ef{display:flex;gap:7px;align-items:flex-start;margin:4px 0;color:#8ee04f}
+.gtt .ef.bad{color:#ef6b5d}
+.gtt .ef img,.gtt .ef .dot{flex:none;width:20px;height:20px;margin-top:1px}
+.gtt .ef .dot{display:grid;place-items:center} .gtt .ef .dot::before{content:"";width:7px;height:7px;transform:rotate(45deg);background:currentColor}
+.gtt .ef .scope{color:#a8c99a;font-size:13px}
+.gtt .rq{margin:6px 0 0;font-size:14px}
+.gtt .rq .ok{color:#8ee04f} .gtt .rq .no{color:#ef6b5d} .gtt .rq .muted{color:#b9ad95}
+.gtt .ut{margin:8px 0 4px;color:#ece6d6}
+.gtt .uc{display:flex;flex-wrap:wrap;gap:4px}
+.gtt .uc .uthumb{width:40px;height:87px;margin:0;border:1px solid #555;border-radius:1px}
+.gtt .more{font-size:13px;color:#b9ad95;align-self:center}
+.gtt .hint{margin-top:8px;font:12px var(--body);color:#8a8272;text-align:center}
+.dico{flex:none;width:58px;height:58px;position:relative}
+.dico img{width:58px;height:58px;filter:drop-shadow(0 2px 3px #000a)}
+
+.detail{padding:14px;display:grid;gap:10px}
+.detail .hd{display:flex;gap:10px;align-items:center}
+.detail .hd .ico{width:52px;height:52px;flex:none}
+.detail .hd .ico svg{width:30px;height:30px}
+.lvls{display:grid;gap:6px}
+.lv{border:1px solid var(--line);border-radius:2px;padding:6px 8px;background:#0d0b0988}
+.lv.cur{border-color:var(--gold);background:#2a2116}
+.lv .h{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.req{font-size:13px;display:grid;gap:3px}
+.req .ok{color:var(--good)} .req .no{color:var(--bad)}
+.units{font-size:13px;color:var(--text)}
+.units b{color:var(--gold)}
+.abil{border-left:2px solid var(--gold);padding:4px 8px;font-size:13px;background:#0d0b0966}
+.abil .an{font-family:var(--display);color:var(--gold2);font-size:15px}
+.spell{border:1px solid var(--gold);border-radius:3px;background:linear-gradient(180deg,#2a2116,#14100c);padding:10px;display:grid;gap:8px}
+.spell.ov{border-color:#7d6bd1;background:linear-gradient(180deg,#221d33,#100d18)}
+.spell .sh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.spell .sn{font:17px var(--display);color:var(--gold2)}
+.spell.ov .sn{color:#cfc4ff}
+.spell .sty{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.aty{width:18px;height:18px;vertical-align:-4px;margin-right:4px}
+.abil .an .aty{margin-left:8px}.abil .an small{font:12px var(--body,inherit);color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.abx{display:grid;gap:2px;font-size:13px}.abx .k{color:var(--muted)}.abx .ui:before{content:"• ";color:var(--muted)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px}
+.sgrid div{background:#0d0b0999;border:1px solid var(--line);border-radius:2px;padding:3px 6px;font-size:12px;color:var(--muted)}
+.sgrid b{display:block;font-size:15px;color:var(--text);font-weight:500;font-variant-numeric:tabular-nums}
+.sgrid b.up{color:var(--good)} .sgrid b.down{color:var(--bad)}
+.sgrid s{font-size:11px;color:var(--muted);margin-left:4px}
+.sblk{font-size:13px;display:grid;gap:2px}
+.sblk .k{color:var(--muted)}
+.slv{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.slv button{background:none;border:1px solid var(--line);color:var(--muted);padding:2px 8px;border-radius:2px;cursor:pointer;font-size:12px}
+.slv button[aria-pressed="true"]{border-color:var(--gold);color:var(--gold2);background:#2a2116}
+.flav{font-style:italic;color:var(--muted);font-size:13px}
+
+.summary{padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.ulist{display:flex;flex-wrap:wrap;gap:6px}
+.uchip{font-size:13px;border:1px solid var(--line);background:#0d0b09;border-radius:2px;padding:3px 7px}
+.uchip small{color:var(--muted)}
+.empty{color:var(--muted);font-style:italic;font-size:14px}
+
+@media (max-width:1180px){.sim{grid-template-columns:230px minmax(0,1fr)}}
+@media (max-width:760px){.sim{grid-template-columns:minmax(0,1fr)}.sheet{position:static}.fhead{grid-template-columns:1fr}.brand{font-size:19px}.patch{font-size:10px;margin-left:0}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ===== v2.4 · acabado premium: capa final de estilo (tipografía, relieve dorado, transiciones, foco, móvil) ===== */
+:root{--gold3:#f6e2a8;--ink:#0b0907;--glow:0 0 0 1px #c9a45c55,0 6px 18px -6px #000,0 0 14px -2px #c9a45c55;--ease:cubic-bezier(.2,.7,.2,1)}
+::selection{background:#c9a45c55;color:#fff}
+html{scroll-behavior:smooth}
+*{scrollbar-width:thin;scrollbar-color:#5a4a36 transparent}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#4a3d2c;border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background-color:#6d5a3f}::-webkit-scrollbar-track{background:transparent}
+body{background-color:var(--ink);background-image:radial-gradient(ellipse 120% 60% at 50% -10%,#2e2318 0,transparent 60%),radial-gradient(ellipse 80% 50% at 50% 110%,#1c140c 0,transparent 70%),repeating-linear-gradient(45deg,rgba(255,255,255,.012) 0 2px,transparent 2px 6px);background-attachment:fixed;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+/* cabecera: cristal oscuro con filo dorado */
+header.top{background:linear-gradient(#231b14f2,#17120ee6);backdrop-filter:blur(8px) saturate(1.2);-webkit-backdrop-filter:blur(8px) saturate(1.2);border-bottom:0;box-shadow:0 6px 18px -10px #000}
+header.top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,#c9a45c 20%,#f6e2a8 50%,#c9a45c 80%,transparent);opacity:.7}
+.brand{display:flex;align-items:center;gap:10px;font-size:23px;background:linear-gradient(180deg,var(--gold3),var(--gold) 70%,#9b7a3a);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 1px 1px #000)}
+.brand::before{content:"";width:22px;height:22px;flex:none;transform:rotate(45deg) scale(.72);border:2px solid var(--gold);box-shadow:inset 0 0 0 3px var(--ink),inset 0 0 0 7px var(--gold);border-radius:2px}
+.crumbs button{text-decoration:none;border-bottom:1px solid #c9a45c66;padding:2px 2px 1px;border-radius:0;transition:color .15s,border-color .15s}
+.crumbs button:hover{color:var(--gold3);border-color:var(--gold3)}
+/* titulares con el dorado del juego */
+h1{font-size:34px;letter-spacing:.01em;background:linear-gradient(180deg,var(--gold3),var(--gold2) 45%,var(--gold) 80%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 2px #000a)}
+#v-fac>h1{margin:6px 0 2px}
+/* marcos con relieve y luz superior */
+.frame{background:linear-gradient(180deg,#2a221a,#1b1612 60%,#181310);box-shadow:inset 0 1px 0 #ffffff0d,inset 0 0 0 1px #000,inset 0 0 0 2px #3a2f22,0 10px 24px -14px #000;border-color:#4f412f}
+/* entrada suave de cada pantalla */
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+main>section:not([hidden]){animation:rise .32s var(--ease) both}
+/* buscador */
+.search input{background:#0b0907 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23a39580' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='6'/%3E%3Cpath d='m13 13 4 4'/%3E%3C/svg%3E") 12px 50%/16px no-repeat;padding-left:38px;border-color:#4f412f;transition:border-color .2s,box-shadow .2s;font-size:15px}
+.search input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #c9a45c22,0 0 18px -4px #c9a45c66}
+/* encabezado de raza con rombo y filo a ambos lados */
+.race{margin-bottom:28px}
+.race>h2{font-size:22px;gap:12px}
+.race>h2::before{content:"";width:8px;height:8px;flex:none;transform:rotate(45deg);background:var(--gold);box-shadow:0 0 8px #c9a45c88}
+.race>h2::after{background:linear-gradient(90deg,#c9a45c88,#4a3d2c 40%,transparent)}
+/* cartas: relieve, brillo al pasar y foco visible */
+.grid{gap:12px}
+.card{position:relative;overflow:hidden;background:linear-gradient(180deg,#2c241c,#1d1814 70%);border-color:#4f412f;box-shadow:inset 0 1px 0 #ffffff0f,0 2px 6px -3px #000;transition:border-color .2s var(--ease),transform .2s var(--ease),box-shadow .2s var(--ease)}
+.card::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 30%,#f6e2a812 45%,transparent 60%);transform:translateX(-100%);transition:transform .6s var(--ease)}
+.card:hover{border-color:var(--gold);transform:translateY(-2px);box-shadow:var(--glow)}
+.card:hover::after{transform:translateX(100%)}
+.card:active{transform:translateY(0)}
+.card:focus-visible{outline:none;border-color:var(--gold2);box-shadow:0 0 0 2px var(--gold2),var(--glow)}
+.card .n{transition:color .2s}.card:hover .n{color:var(--gold3)}
+#races img.crest{width:60px;height:60px;transition:transform .25s var(--ease)}
+#races .card:hover img.crest{transform:scale(1.06) rotate(-2deg)}
+.card.info:hover{box-shadow:inset 0 1px 0 #ffffff0f;border-color:#4f412f}.card.info::after{display:none}
+/* pestañas: indicador dorado */
+.tabs{gap:2px;border-bottom-color:#4f412f}
+.tabs button{position:relative;transition:color .2s,background .2s}
+.tabs button:hover{color:var(--gold2)}
+.tabs button[aria-selected="true"]{background:linear-gradient(180deg,#30271d,#211b15)}
+.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:12px;right:12px;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold2),transparent)}
+/* botones */
+.btn{background:linear-gradient(180deg,#5a4630,#33281b 55%,#2a2016);border-color:#b8934f;color:var(--gold3);box-shadow:inset 0 1px 0 #ffffff26,0 2px 4px -2px #000;transition:filter .15s,transform .1s,box-shadow .2s;text-shadow:0 1px 1px #000}
+.btn:hover{filter:brightness(1.15);box-shadow:inset 0 1px 0 #ffffff26,0 0 12px -2px #c9a45c88}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:linear-gradient(180deg,#221b15,#18130f);border-color:#4f412f;box-shadow:inset 0 1px 0 #ffffff0a}
+.btn.ghost:hover{border-color:var(--gold);color:var(--gold3)}
+.tag{border-color:#5a4a36;background:#0e0b0899}
+.tag.leg{background:linear-gradient(180deg,#f0d48e,#c9a45c);border-color:#f6e2a8;box-shadow:0 0 6px -1px #c9a45c99;color:#1a1208;font-weight:600}
+/* cabecera de facción: escudo grande con halo; efectos plegables en móvil */
+.fhead{padding:18px 20px;gap:20px}
+.fhead img.crest{width:84px;height:84px;filter:drop-shadow(0 4px 8px #000) drop-shadow(0 0 10px #c9a45c33)}
+details.fxd>summary{list-style:none;cursor:pointer;display:none}
+details.fxd>summary::-webkit-details-marker{display:none}
+ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
+/* pantalla de carga mientras llegan los datos */
+#splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 40%,#2a2016,#0b0907 70%);transition:opacity .45s var(--ease),visibility .45s}
+#splash.done{opacity:0;visibility:hidden}
+#splash .in{display:grid;justify-items:center;gap:14px;text-align:center}
+#splash .t{font:30px var(--display);background:linear-gradient(180deg,var(--gold3),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+#splash .ring{width:46px;height:46px;border-radius:50%;border:2px solid #4a3d2c;border-top-color:var(--gold2);animation:spin 1s linear infinite}
+#splash .s{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* árbol y paneles */
+.sheet,.detail,.summary,.tree{box-shadow:inset 0 1px 0 #ffffff0d,inset 0 0 0 1px #000,inset 0 0 0 2px #3a2f22,0 12px 28px -16px #000}
+.uchip{transition:border-color .15s}.uchip:hover{border-color:var(--gold)}
+.lvbar span{box-shadow:0 0 8px #c9a45c88}
+@media (max-width:760px){
+  h1{font-size:28px}
+  header.top .wrap{gap:6px 12px;padding-block:8px}
+  .brand{font-size:19px}.brand::before{width:18px;height:18px}
+  .crumbs{order:3;flex-basis:100%;font-size:13px}
+  .patch{margin-left:auto}
+  .fhead{padding:14px;gap:10px;grid-template-columns:auto 1fr;align-items:center}
+  .fhead img.crest{width:56px;height:56px}
+  .fhead>div{display:contents}
+  .fhead h1{grid-column:2;font-size:26px}.fhead h1+.muted{grid-column:2;margin-top:-8px}
+  details.fxd{grid-column:1/-1}
+  details.fxd>summary{display:flex;align-items:center;gap:8px;font:16px var(--display);color:var(--gold2);padding:6px 0 0}
+  details.fxd>summary::before{content:"";width:7px;height:7px;transform:rotate(45deg);border:solid var(--gold);border-width:0 2px 2px 0;transition:transform .2s}
+  details.fxd[open]>summary::before{transform:rotate(-135deg)}
+  #races img.crest{width:50px;height:50px}
+  .tabs{overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+  .tabs button{font-size:16px;padding:8px 11px;white-space:nowrap;flex:none}
+  .fhead h1+.muted{margin-top:-4px;font-size:14px}
+  .card:hover{transform:none}
+}
+/* v2.5: árbol, ficha y ejército */
+.sk .pl,.sk .ic{transition:filter .18s var(--ease)}
+.treescroll{box-shadow:inset 0 0 60px -10px #000c}
+.detail h3,.summary h3,.sheet .fxbox h3{padding-bottom:6px;border-bottom:1px solid transparent;border-image:linear-gradient(90deg,var(--gold),transparent) 1}
+.btn.jump{display:none}
+#a-slots .slot{background:linear-gradient(180deg,#1b1611d9,#0b0907d9);transition:border-color .15s,box-shadow .15s,transform .15s}
+#a-slots .slot:hover{border-color:var(--gold);box-shadow:0 0 10px -2px #c9a45c66}
+#a-slots .slot.on{box-shadow:0 0 10px #c9a45c88,inset 0 0 0 1px #c9a45c55}
+@media (max-width:760px){
+  .btn.jump{display:block;flex-basis:100%}
+  .portrait img.crest.full{width:60px;height:130px}
+  .tree .legend{display:none}
+}
+/* v2.6: buscador global de la cabecera */
+.gsearch{position:relative;margin-left:auto;flex:0 1 340px;min-width:0}
+.gsearch+.patch{margin-left:0}
+#gq{width:100%;padding:7px 10px 7px 32px;font:14px var(--body,inherit);color:var(--text,#eadfc8);background:#0d0b09cc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23c9a45c' stroke-width='2'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 4 4'/%3E%3C/svg%3E") no-repeat 10px 50%;border:1px solid var(--line);border-radius:3px;transition:border-color .15s,box-shadow .15s}
+#gq:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #c9a45c33}
+#gres{position:absolute;right:0;top:calc(100% + 6px);width:min(460px,calc(100vw - 32px));max-height:min(70vh,520px);overflow:auto;z-index:20;background:linear-gradient(#211a14,#16120e);border:1px solid var(--gold);border-radius:3px;box-shadow:0 18px 40px -12px #000,0 0 0 1px #000}
+#gres button{display:flex;gap:10px;align-items:center;width:100%;padding:7px 10px;border:0;border-bottom:1px solid #ffffff0a;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+#gres button:hover,#gres button[aria-selected=true]{background:#c9a45c1f}
+#gres .gi{flex:none;width:34px;height:34px;display:grid;place-items:center;overflow:hidden;border-radius:2px;background:#0d0b09}
+#gres .gi:empty::before{content:"";width:8px;height:8px;transform:rotate(45deg);background:var(--gold);opacity:.6}
+#gres .gi img{max-width:100%;max-height:100%;object-fit:contain}
+#gres .gi .crest{width:34px;height:34px;font-size:13px;margin:0;box-shadow:none}
+#gres .gt{min-width:0;flex:1}
+#gres .gn{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#gres .gs{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#gres .gk{flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold2);border:1px solid #c9a45c55;border-radius:2px;padding:1px 5px}
+#gres .gnone{padding:12px;color:var(--muted);font-style:italic}
+.flash{animation:flash 1.6s var(--ease)}
+@keyframes flash{0%,40%{box-shadow:0 0 0 2px var(--gold2),0 0 18px #f6e2a8aa}100%{box-shadow:none}}
+@media (max-width:760px){.gsearch{order:4;flex-basis:100%;margin-left:0}#gq{font-size:16px}#gres{left:0;right:auto;width:100%}}
+@media (prefers-reduced-motion:reduce){main>section:not([hidden]){animation:none}.card::after{display:none}#splash .ring{animation:none}}
+</style>
+
+<div id="splash" aria-live="polite"><div class="in"><div class="ring" aria-hidden="true"></div><div class="t">Árbol de Habilidades</div><div class="s">Cargando datos del juego…</div></div></div>
+<header class="top"><div class="wrap">
+  <div class="brand">Árbol de Habilidades</div>
+  <nav class="crumbs" id="crumbs" aria-label="Navegación"></nav>
+  <div class="gsearch" role="search"><input id="gq" type="search" placeholder="Buscar personaje, unidad, facción o habilidad…" aria-label="Buscar en todo el simulador" autocomplete="off" aria-controls="gres" aria-expanded="false">
+    <div id="gres" role="listbox" aria-label="Resultados" hidden></div></div>
+  <div class="patch" id="patch"></div>
+</div></header>
+
+<main class="wrap">
+  <section id="v-fac">
+    <h1>Elige facción</h1>
+    <div class="search"><input id="q" type="search" placeholder="Buscar facción, raza, señor o héroe…" autocomplete="off"><span class="muted" id="qcount"></span></div>
+    <div id="races"></div>
+  </section>
+
+  <section id="v-char" hidden>
+    <div class="fhead frame" id="fhead"></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-lords" aria-selected="true">Señores</button>
+      <button role="tab" id="tab-heroes" aria-selected="false">Héroes</button>
+      <button role="tab" id="tab-units" aria-selected="false">Unidades</button>
+      <button role="tab" id="tab-army" aria-selected="false">Ejército</button>
+    </div>
+    <div id="chars"></div>
+  </section>
+
+  <section id="v-tree" hidden>
+    <div class="sim">
+      <aside class="sheet frame" id="sheet"></aside>
+      <div class="simmain">
+      <div class="tree frame">
+        <div class="tbar"><div class="legend"><span>Clic: añadir punto</span><span>Clic derecho: quitar</span><span>Arrastrar: moverse</span><span>Ctrl + rueda: zoom</span></div>
+          <div class="zoom"><button id="zout" aria-label="Alejar">−</button><output id="zval">100%</output><button id="zin" aria-label="Acercar">+</button></div></div>
+        <div class="treescroll" id="treescroll"><div class="gtree" id="rows"></div></div>
+      </div>
+      <aside class="detail frame" id="detail"></aside>
+      <div class="summary frame" id="summary"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-army" hidden></section>
+</main>
+
+<script src="i18n.js"></script><!-- carga datos(_es).js y ejercitos(_es).js según el idioma -->
+<script src="escudos.js"></script>
+<script src="carga.js"></script><!-- retratos, cartas e iconos: se cargan por subcultura desde img/ -->
+<script src="iconos.js"></script>
+<script src="ejercito.js"></script>
+<script src="ui_juego.js"></script><!-- texturas de la pantalla de habilidades del juego -->
+<script src="img/iconos_efectos.js"></script><!-- iconos de las líneas de efecto -->
+<script src="hechizos_extra.js"></script><!-- tipo de hechizo, objetivos válidos y líneas extra del juego -->
+<script>
+"use strict";
+// Enlace público del simulador; los enlaces de build se forman como ARTIFACT_URL#<token>
+const ARTIFACT_URL = "https://morgui92.github.io/Warhammer-3/";
+const D = window.WH3DATA;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const RACE_COL = {};
+const AGENT_ES = {general:"Señor", champion:"Campeón", dignitary:"Dignatario", engineer:"Ingeniero", spy:"Espía", wizard:"Hechicero", runesmith:"Herrero rúnico"};
+const CAT_ES = {character:"Personaje", battle:"Batalla", campaign:"Campaña"};
+const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
+const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
+const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
+// Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
+const SIM_VERSION = "2.6.3";
+$("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
+
+// ---------- iconos (el volcado no incluye imágenes del juego) ----------
+const ICONS = {
+  sword:"M14.5 2l7.5.1-.1 7.4L11 20.3l1.6 1.6-1.4 1.4-2.8-2.8-3 3-2-2 3-3-2.8-2.8 1.4-1.4 1.6 1.6zM16 4.1L7.3 12.8l3.9 3.9L19.9 8V4.1z",
+  shield:"M12 2l9 3.5v6.2c0 5.3-3.8 9-9 10.3-5.2-1.3-9-5-9-10.3V5.5zm0 2.2L5 7v4.7c0 4 2.8 7 7 8.2V4.2z",
+  horse:"M7 21v-6.5L4 12l1.5-6L10 3l1 2h3l5 4-1.5 2.5L15 10l-1 3 3 2v6h-2v-5l-3-1.5L9 15v6z",
+  magic:"M12 1l2.4 6.6L21 8l-5.2 4.3L17.6 19 12 15.3 6.4 19l1.8-6.7L3 8l6.6-.4z",
+  banner:"M5 2h2v20H5zm3 1h12l-3 4.5L20 12H8z",
+  coin:"M12 3c4.97 0 9 1.8 9 4v10c0 2.2-4.03 4-9 4s-9-1.8-9-4V7c0-2.2 4.03-4 9-4zm0 2C7.6 5 5 6.4 5 7s2.6 2 7 2 7-1.4 7-2-2.6-2-7-2zm7 5.2C17.4 11.3 14.8 12 12 12s-5.4-.7-7-1.8V12c0 .6 2.6 2 7 2s7-1.4 7-2z",
+  boot:"M7 2h6v8l6 4c1.6 1 2 2.2 2 4v2H4l-1-3 2-1V2zm2 2v12l-2 1 .4 1H19c0-.8-.3-1.4-1-1.8L11 11V4z",
+  heart:"M12 21l-1.4-1.3C5.4 15 2 12 2 8.3 2 5.3 4.3 3 7.3 3c1.7 0 3.4.8 4.7 2.1C13.3 3.8 15 3 16.7 3 19.7 3 22 5.3 22 8.3c0 3.7-3.4 6.7-8.6 11.4z",
+  skull:"M12 2C6.5 2 3 5.6 3 10.3c0 2.8 1.4 4.9 3 6V20h3v-2h2v2h2v-2h2v2h3v-3.7c1.6-1.1 3-3.2 3-6C21 5.6 17.5 2 12 2zM8.5 13a2 2 0 110-4 2 2 0 010 4zm7 0a2 2 0 110-4 2 2 0 010 4z",
+  eye:"M12 5C6 5 2 12 2 12s4 7 10 7 10-7 10-7-4-7-10-7zm0 11.5a4.5 4.5 0 110-9 4.5 4.5 0 010 9zm0-2.5a2 2 0 100-4 2 2 0 000 4z",
+  flame:"M12 2s6 5.3 6 11a6 6 0 11-12 0c0-2.6 1.3-4.6 2.6-6 .3 2 1.4 3.4 2.4 3.4C12.6 10.4 10 6 12 2z",
+  crown:"M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5zm3 14h12v-1H6z",
+  gear:"M19.4 13a7.5 7.5 0 000-2l2.1-1.6-2-3.5-2.5 1a7 7 0 00-1.7-1L15 3h-4l-.4 2.6a7 7 0 00-1.7 1l-2.5-1-2 3.5L6.5 11a7.5 7.5 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L11 21h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z",
+  book:"M4 3h7a3 3 0 013 3v15a2.5 2.5 0 00-2.5-2.5H4zm16 0h-4.5A1.5 1.5 0 0014 4.5V21a2.5 2.5 0 012.5-2.5H20z",
+  bow:"M5 2c6 2 10 6 12 12l2.6-.5L21 22l-8.5-1.4.5-2.6C7 16 3 12 2 5zm1 4c1.4 4.6 4.6 7.8 9.3 9.3L6 6z",
+};
+const ICON_RULES = [
+  [/mount|steed|horse|pegasus|griffon|dragon|chariot|wolf|boar|spider|beast_mount|manticore|wyvern|carnosaur|stegadon|cold_one|unicorn|elk|stag|deer|bear|palanquin|throne|disc|juggernaut|steed/, "horse"],
+  [/spell|lore|magic|wind|arcane|mana|wizard|channel|vortex|miscast/, "magic"],
+  [/attack|blade|weapon|damage|strike|kill|melee|sword|axe|frenzy|rage|charge/, "sword"],
+  [/defen|armour|armor|shield|resist|ward|tough|hp|health|block/, "shield"],
+  [/missile|ranged|range|ammo|bow|shoot|gun|reload|accura|artillery/, "bow"],
+  [/speed|movement|march|move|vanguard|travel/, "boot"],
+  [/heal|replen|regen|recover|growth|food/, "heart"],
+  [/gold|income|upkeep|tax|trade|coin|campaign|money|loot|treasure|economy|cost/, "coin"],
+  [/spy|hide|ambush|stalk|stealth|vision|sight|agent|eye/, "eye"],
+  [/fire|flame|burn/, "flame"],
+  [/undead|death|necro|skull|bone|corruption|kill/, "skull"],
+  [/engineer|gear|tech|machine|build|construct|forge/, "gear"],
+  [/book|lore|learn|research|scholar/, "book"],
+  [/army|leader|command|lord|aura|banner|morale|leadership|presence|inspir|rally|army_buff/, "banner"],
+];
+function iconFor(skKey, img, row) {
+  const s = (img + " " + skKey).toLowerCase().replace(/skill/g, "");
+  for (const [re, ic] of ICON_RULES) if (re.test(s)) return ic;
+  return row === 5 ? "coin" : row === 4 ? "banner" : "crown";
+}
+const svgIcon = n => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[n] || ICONS.crown}"/></svg>`;
+
+// ---------- utilidades de datos ----------
+function hashCol(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return `hsl(${Math.abs(h) % 360} 45% 32%)`; }
+function facColor(f) { return f.col ? "#" + f.col.replace("#", "") : hashCol(f.sc); }
+const ESCUDOS = window.WH3ESCUDOS || {};
+function facCrest(f) { return ESCUDOS[f.k] ? `<img class="crest" src="${ESCUDOS[f.k]}" alt="">` : `<span class="crest" style="background:${facColor(f)}">${esc(initials(f.n))}</span>`; }
+const RETRATOS = window.WH3RETRATOS || {img: [], a: {}};
+function agentCrest(k, full) { const a = D.agents[k], i = RETRATOS.a[k]; return i !== undefined ? `<img class="crest ${full ? "full" : "face"}${a.leg ? " leg" : ""}" src="${RETRATOS.img[i]}" alt="">` : `<span class="crest${a.leg ? "" : " com"}" style="background:${a.leg ? "#6b4a1a" : "#2e3a40"}">${esc(initials(a.n))}</span>`; }
+function initials(n) { return n.replace(/^(Emperor|King|Queen|Lord|Lady|Grand|High|Prince|Princess|Tsarina|The)\s+/i, "").trim()[0] || "?"; }
+function fmtNum(v) { return Number.isInteger(v) ? v : (+v.toFixed(2)); }
+function fmtEffect(ei, si, v) {
+  const e = D.effects[ei]; if (!e) return null;
+  let t = e.t.replace(/%\+n/g, (v >= 0 ? "+" : "") + fmtNum(v)).replace(/%n/g, fmtNum(Math.abs(v) === v ? v : v)).replace(/%%/g, "%");
+  const good = e.bad ? v < 0 : v >= 0;
+  const sc = si >= 0 ? D.scopes[si] : "";
+  return {t, good, sc, e};
+}
+function fxLi(ei, si, v) {
+  const f = fmtEffect(ei, si, v); if (!f) return "";
+  return `<li><span class="${f.good ? "pos" : "neg"}">${esc(f.t)}</span>${f.sc ? ` <span class="scope">(${esc(f.sc)})</span>` : ""}</li>`;
+}
+const unitCache = new Map();
+function unitsFor(ei, race) {
+  const k = ei + ":" + race; if (unitCache.has(k)) return unitCache.get(k);
+  const e = D.effects[ei]; const names = new Set();
+  const chars = new Set();
+  const ix = new Map();  // nombre -> entrada de D.units, para la miniatura
+  const take = ui => { const u = D.units[ui]; if (u && (race < 0 || u[1].includes(race))) { names.add(u[0]); if (!ix.has(u[0])) ix.set(u[0], ui); if (u[2] === "lord" || u[2] === "hero") chars.add(u[0]); } };
+  // Solo se listan unidades cuando el efecto nombra unidades concretas. Si el conjunto se define por tipo, clase o
+  // categoría (auras como Presencia inspiradora, bonos a todo el ejército o al propio personaje), no se lista nada:
+  // saldría todo el roster de la facción.
+  let broad = false;
+  for (const si of e.us || []) {
+    const rows = D.unit_sets[si] || []; const inc = new Set(), exc = new Set();
+    for (const [c, cat, cl, rec, ex] of rows) {
+      const tgt = ex ? exc : inc;
+      if (rec >= 0) { tgt.add(rec); continue; }
+      if (rec === -2) continue;
+      if (!c && !cat && !cl) continue;
+      if (!ex) broad = true;
+      D.units.forEach((u, ui) => { if ((c || (u[2] !== "lord" && u[2] !== "hero")) && (!c || u[2] === c) && (!cat || u[3] === cat) && (!cl || u[4] === cl)) tgt.add(ui); });
+    }
+    for (const ui of inc) if (!exc.has(ui)) take(ui);
+  }
+  for (const ui of e.ur || []) take(ui);
+  // solo tropas: los efectos de "este señor" no deben listar a todos los personajes de la raza
+  let out = broad ? [] : [...names].filter(n => !chars.has(n)).sort();
+  // listas explícitas que en la práctica son una categoría amplia ("unidades de No Muertos", "todos los Demonios"):
+  // si cubren la mitad o más de las tropas de la raza, o más de 60 unidades entre todas las razas, tampoco se listan
+  // Si el texto del efecto nombra las unidades («a las unidades de Portadores de Plaga, Nurgletes…»), se muestran siempre
+  // que no pasen de 60; si solo da una categoría («unidades a distancia», «infantería y caballería», «No Muertos») y la lista
+  // pasa de 9 unidades, cubre media raza o un grupo entero, no se listan: basta el texto.
+  const named = out.length && namesInText(e.t, out);
+  if (out.length && race >= 0 && (unitsFor(ei, -1).length > 60 || !named && (out.length >= 10 || out.length >= raceTroops(race) / 2 || wholeGroup(out, race)))) out = [];
+  out.ix = ix; unitCache.set(k, out); return out;
+}
+// ¿La lista es en realidad «todas las unidades a distancia / de caballería / …» de la raza? Si cubre casi entera (80%)
+// alguna clase de tropa (casta, categoría o clase de unidad, mín. 5) y esas clases suman la mayor parte de la lista, sí.
+function namesInText(t, out) {
+  // ¿el texto nombra las unidades? Se compara por raíz de cada palabra (sin tildes, 6 letras) para aceptar plurales y
+  // grupos («Dragones» nombra a «Dragón Estelar», «Eslizones» a «Hostigadores Eslizones»). Cuenta como nombrada si la
+  // mayoría (60%) de las unidades de la lista tiene alguna palabra que aparece en el texto.
+  const norm = x => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const txt = norm(t || ""); if (!txt || !out.length) return false;
+  let hit = 0;
+  for (const n of out) if (norm(n).replace(/[()]/g, " ").split(/[\s,–-]+/).some(w => w.length > 3 && txt.includes(w.slice(0, 6)))) hit++;
+  return hit >= 0.6 * out.length;
+}
+const groupCache = new Map();
+function wholeGroup(out, race) {
+  if (out.length < 10) return false;  // listas cortas de unidades con nombre: se muestran
+  if (!groupCache.has(race)) {
+    const g = new Map();
+    for (const u of D.units) if (u[1].includes(race) && u[2] !== "lord" && u[2] !== "hero")
+      for (const k of ["c" + u[2], "t" + u[3], "l" + u[4]]) { if (!g.has(k)) g.set(k, new Set()); g.get(k).add(u[0]); }
+    groupCache.set(race, [...g.values()].filter(x => x.size >= 5));
+  }
+  const inOut = new Set(out), covered = new Set();
+  for (const g of groupCache.get(race)) {
+    const hit = [...g].filter(n => inOut.has(n));
+    if (hit.length >= 0.8 * g.size) hit.forEach(n => covered.add(n));
+  }
+  return covered.size >= 0.6 * out.length;
+}
+const troopCache = new Map();
+function raceTroops(race) {
+  if (!troopCache.has(race)) troopCache.set(race, new Set(D.units.filter(u => u[1].includes(race) && u[2] !== "lord" && u[2] !== "hero").map(u => u[0])).size);
+  return troopCache.get(race);
+}
+function statName(k) { return (D.stats[k] || k.replace(/^(stat|scalar)_/, "").replace(/_/g, " ")).trim(); }
+// Datos de hechizos sacados de las tablas del juego (hechizos_extra.js): tipo oficial («Vórtice», «Maldición (área)»…),
+// objetivos válidos (special_ability_to_invalid_target_flags) y las líneas extra que el juego pone en el tooltip
+const ABX = window.WH3ABX || {img: []};
+const ABXL = ABX[window.WH3LANG === "en" ? "en" : "es"] || {t: {}, a: {}};
+function abxType(ai) {
+  const x = ABXL.a[ai], t = x && x.y && ABXL.t[x.y]; if (!t) return "";
+  return `<span title="${esc(t[2] || "")}">${t[1] >= 0 && ABX.img[t[1]] ? `<img class="aty" src="${ABX.img[t[1]]}" alt="">` : ""}${esc(t[0])}</span>`;
+}
+function abxLines(ai) {
+  const x = ABXL.a[ai]; if (!x || (!x.ok && !x.ui)) return "";
+  const ok = x.ok ? `<div><span class="k">${esc(ABXL.valid || "Objetivos válidos")}:</span> <b>${x.ok.map(esc).join(", ")}</b></div>` : "";
+  const ui = (x.ui || []).map(([t, st]) => `<div class="ui ${st === "positive" ? "pos" : st === "negative" ? "neg" : ""}">${esc(t)}</div>`).join("");
+  return `<div class="abx">${ok}${ui}</div>`;
+}
+function abilityHtml(ai) {
+  const a = D.abilities[ai]; if (!a) return "";
+  const bits = [];
+  if (a.pas) bits.push("Pasiva"); else if (a.rc > 0) bits.push(`Recarga ${a.rc} s`);
+  if (a.dur > 0) bits.push(`Duración ${a.dur} s`);
+  if (a.mana > 0) bits.push(`Coste ${a.mana} vientos`);
+  if (a.uses > 0) bits.push(`${a.uses} usos`);
+  const ph = (a.ph || []).map(p => {
+    const st = p.st.map(([s, v, how]) => {
+      const val = how === "mult" ? `${v >= 1 ? "+" : ""}${Math.round((v - 1) * 100)}%` : `${v >= 0 ? "+" : ""}${fmtNum(v)}`;
+      const good = how === "mult" ? v >= 1 : v >= 0;
+      return `<span class="${good ? "pos" : "neg"}">${esc(statName(s))} ${val}</span>`;
+    });
+    const at = (p.at || []).map(i => D.attributes[i] ? `<span class="pos">${esc(D.attributes[i].n)}</span>` : "").filter(Boolean);
+    const extra = []; if (p.heal) extra.push("Curación"); if (p.mag) extra.push("Ataques mágicos"); if (p.fire) extra.push("Ataques de fuego");
+    const tgt = p.tgt === "E" ? "enemigos" : p.tgt && p.tgt.includes("E") ? "todos" : "aliados";
+    const all = [...st, ...at, ...extra.map(x => `<span class="pos">${x}</span>`)];
+    return all.length ? `<div>${p.dur > 0 ? `<span class="muted">${p.dur} s · ${tgt}:</span> ` : `<span class="muted">${tgt}:</span> `}${all.join(", ")}</div>` : "";
+  }).join("");
+  const ty = abxType(ai);
+  return `<div class="abil"><div class="an">${esc(a.n)}${ty ? ` <small>${ty}</small>` : ""}</div>${bits.length ? `<div class="muted">${bits.join(" · ")}</div>` : ""}${ph}${abxLines(ai)}${a.d ? `<div class="flav">${esc(a.d)}</div>` : ""}</div>`;
+}
+
+// ---------- estado ----------
+const S = {fac: null, tab: "lords", agent: null, rank: 1, lv: [], sel: -1, hover: -1, tree: null, trait: -1};
+
+function treeFor(agentKey, fi) {
+  const a = D.agents[agentKey], T = D.trees[a.tree], f = D.factions[fi], ri = raceIdx[f.sc];
+  const all = T[0].map((n, i) => ({i, s: n[0], row: n[1], col: n[2], req: n[3], vis: n[4], poc: n[5], f: n[6], sc: n[7], anc: n[8], ext: n[9]}));
+  let inc = all.filter(n => (n.f < 0 && !n.ext) || n.f === fi).filter(n => n.sc < 0 || n.sc === ri);
+  // nodos de facción sustituyen al genérico de la misma posición
+  const byPos = new Map(), repl = new Map();
+  for (const n of inc) { const k = n.row + ":" + n.col; if (!byPos.has(k)) byPos.set(k, []); byPos.get(k).push(n); }
+  for (const [, arr] of byPos) if (arr.length > 1 && arr.some(n => n.f === fi)) {
+    const winner = arr.find(n => n.f === fi);
+    for (const n of arr) if (n !== winner) { repl.set(n.i, winner.i); n.dead = 1; }
+  }
+  inc = inc.filter(n => !n.dead);
+  const R = i => repl.get(i) ?? i;
+  const vis = inc.filter(n => n.vis && n.row < 90);
+  // habilidades innatas ocultas: las que se tienen al crearse y las de la fila de rasgos del señor (fila 6),
+  // que pueden venir con 0 puntos (p. ej. el rasgo de Taurox o el de Boris Todbringer)
+  let hidden = inc.filter(n => !n.vis && (n.poc > 0 || n.row === 6 || /innate|lord_trait/.test(D.skill_keys[n.s])));
+  // en los genéricos los rasgos con 0 puntos son las opciones entre las que se elige uno al reclutar
+  const opts = hidden.filter(n => !n.poc).sort((x, y) => x.row - y.row || x.col - y.col), traits = !a.leg && opts.length > 1 ? opts : [];
+  if (traits.length) hidden = hidden.filter(n => n.poc);
+  const vi = new Map(vis.map((n, j) => [n.i, j]));
+  vis.forEach(n => { n.req_all = []; n.req_sub = []; n.locks = []; n.children = []; });
+  for (const [c, p, sub] of T[1]) {
+    const cj = vi.get(R(c)), pj = vi.get(R(p));
+    if (cj === undefined || pj === undefined || cj === pj) continue;
+    (sub ? vis[cj].req_sub : vis[cj].req_all).push(pj);
+    vis[pj].children.push(cj);
+  }
+  for (const [n, sk, lv] of T[2]) { const j = vi.get(R(n)); if (j !== undefined) vis[j].locks.push([sk, lv]); }
+  // columnas compactas compartidas por todas las filas
+  const cols = [...new Set(vis.map(n => n.col))].sort((a, b) => a - b);
+  const cmap = new Map(cols.map((c, j) => [c, j]));
+  vis.forEach(n => n.x = cmap.get(n.col));
+  const rows = [...new Set(vis.map(n => n.row))].sort((a, b) => a - b);
+  // filas sueltas (sin flechas ni grupos, como la primera: Mentor, Ejército de renombre…): el juego las pinta seguidas
+  // de izquierda a derecha, no repartidas por las columnas de las demás filas
+  for (const r of rows) {
+    const rn = vis.filter(n => n.row === r);
+    if (rn.some(n => n.req_all.length || n.req_sub.length || n.children.length)) continue;
+    rn.sort((a, b) => a.x - b.x).forEach((n, k) => n.x = k);
+  }
+  return {a, f, fi, ri, vis, hidden, traits, rows, ncols: cols.length};
+}
+function catFor(row, agentKey) {
+  const own = D.categories.filter(c => c.ag === agentKey && c.min <= row && row <= c.max);
+  const c = own[0] || D.categories.find(c => !c.ag && c.min <= row && row <= c.max);
+  if (!c) return {n: "Otras", col: "a39580"};
+  const base = c.k.split("_")[0];
+  return {n: CAT_ES[base] || c.k.replace(/^(dlc\d+|pro\d+)_/, "").replace(/_/g, " "), col: c.col};
+}
+const SK = i => D.skills[i];
+function rankReq(n, level) {
+  const L = SK(n.s).lv[level - 1]; if (!L) return 99;
+  let r = L.r;
+  for (const [k, rr] of L.ro || []) if (k === S.tree.f.k || k === S.tree.f.sc) r = rr;
+  return r || 0;
+}
+const maxLv = n => SK(n.s).lv.length;
+const isAuto = n => SK(n.s).auto > 0;
+function prereq(j) {
+  const n = S.tree.vis[j];
+  for (const p of n.req_all) if (!(S.lv[p] > 0)) return false;
+  if (n.req_sub.length) {
+    const need = Math.max(1, n.req);
+    const have = n.req_sub.reduce((t, p) => t + (S.lv[p] || 0), 0);
+    if (have < need) return false;
+  }
+  return true;
+}
+function lockedBy(j) {
+  const n = S.tree.vis[j];
+  for (const [sk, lv] of n.locks) {
+    const k = S.tree.vis.findIndex((m, x) => x !== j && m.s === sk && S.lv[x] >= lv);
+    if (k >= 0) return k;
+  }
+  return -1;
+}
+// El nivel sigue a los puntos: nivel R da R-1 puntos, así que nivel = 1 + puntos gastados, hasta el máximo del personaje (50)
+const maxRank = () => S.tree.a.maxr || 50;
+const pointsTotal = () => maxRank() - 1;
+const spent = () => S.tree.vis.reduce((t, n, j) => t + (isAuto(n) ? 0 : S.lv[j] || 0), 0);
+const syncRank = () => { S.rank = Math.min(maxRank(), 1 + spent()); };
+const nextRank = () => Math.min(maxRank(), spent() + 2);  // nivel que tendría el personaje con un punto más
+function canAdd(j) {
+  const n = S.tree.vis[j], l = S.lv[j] || 0;
+  if (isAuto(n) || l >= maxLv(n)) return false;
+  if (!prereq(j) || lockedBy(j) >= 0) return false;
+  if (nextRank() < rankReq(n, l + 1)) return false;
+  return spent() < pointsTotal();
+}
+function applyAuto() {
+  S.tree.vis.forEach((n, j) => { if (isAuto(n)) S.lv[j] = S.rank >= SK(n.s).auto ? 1 : 0; });
+}
+function validate() {
+  for (let guard = 0; guard < 200; guard++) {
+    syncRank(); applyAuto();
+    let changed = false;
+    S.tree.vis.forEach((n, j) => {
+      if (isAuto(n) || !(S.lv[j] > 0)) return;
+      if (!prereq(j) || lockedBy(j) >= 0) { S.lv[j] = 0; changed = true; return; }
+      while (S.lv[j] > 0 && S.rank < rankReq(n, S.lv[j])) { S.lv[j]--; changed = true; }
+    });
+    if (!changed) break;
+  }
+}
+function add(j) { if (canAdd(j)) { S.lv[j] = (S.lv[j] || 0) + 1; validate(); changed(); } }
+function remove(j) { if (S.lv[j] > 0 && !isAuto(S.tree.vis[j])) { S.lv[j]--; validate(); changed(); } }
+
+// ---------- token de build (solo letras, dígitos, . _ ~ - para que viaje en el enlace) ----------
+const B36 = "0123456789abcdefghijklmnopqrstuvwxyz";
+function token() {
+  const lv = S.tree.vis.map((n, j) => isAuto(n) ? "0" : B36[S.lv[j] || 0]).join("").replace(/0+$/, "");
+  return ["b1", S.tree.f.k, S.agent, S.rank, lv || "0"].join(".") + (S.trait >= 0 ? ".t" + S.trait : "");
+}
+function fromToken(t) {
+  const m = /^b1\.([a-z0-9_]+)\.([a-z0-9_]+)\.(\d+)\.([0-9a-z]*)(?:\.t(\d+))?$/i.exec(t || ""); if (!m) return false;
+  const fi = facIdx[m[1]]; if (fi === undefined || !D.agents[m[2]]) return false;
+  openTree(fi, m[2], +m[3], m[4], m[5]); return true;
+}
+function shareLink() { return (ARTIFACT_URL || "") + "#" + token(); }
+
+// ---------- vistas ----------
+function show(id) {
+  for (const v of ["v-fac", "v-char", "v-tree", "v-army"]) $("#" + v).hidden = v !== id; crumbs(id); window.scrollTo(0, 0);
+  if (id === "v-tree" && S.tree) { drawLinks(); placeRowLabels(); }  // las medidas solo existen con la vista visible
+}
+function crumbs(view) {
+  const c = [`<button data-go="fac">Facciones</button>`];
+  if (view !== "v-fac" && S.fac !== null) c.push(`<span class="sep">›</span>`, view === "v-char" ? `<span>${esc(D.factions[S.fac].n)}</span>` : `<button data-go="char">${esc(D.factions[S.fac].n)}</button>`);
+  if (view === "v-tree" && S.agent) c.push(`<span class="sep">›</span><span>${esc(D.agents[S.agent].n)}</span>`);
+  if (view === "v-army") c.push(`<span class="sep">›</span><span>Ejército</span>`);
+  $("#crumbs").innerHTML = c.join("");
+}
+$("#crumbs").addEventListener("click", e => {
+  const g = e.target.dataset.go; if (!g) return;
+  if (g === "fac") { S.fac = null; show("v-fac"); } else openFaction(S.fac);
+});
+
+function renderFactions() {
+  const q = fold($("#q").value.trim());  // sin tildes ni mayúsculas, como el buscador de la cabecera
+  const groups = new Map(); let count = 0;
+  D.factions.forEach((f, fi) => {
+    const names = [...f.lords, ...f.heroes].map(k => D.agents[k].n);
+    const hay = fold(f.n + " " + f.race + " " + names.join(" "));
+    if (q && !hay.includes(q)) return;
+    if (!groups.has(f.race)) groups.set(f.race, []);
+    groups.get(f.race).push(fi); count++;
+  });
+  $("#qcount").textContent = `${count} facciones`;
+  $("#races").innerHTML = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([race, list]) => `
+    <div class="race"><h2>${esc(race)}</h2><div class="grid">${list.sort(byOrd).map(fi => {
+      const f = D.factions[fi], ll = f.ll.filter(k => D.agents[k]).map(k => D.agents[k].n).join(", ");
+      return `<button class="card" data-f="${fi}">${facCrest(f)}<span class="t"><span class="n">${esc(f.n)}</span><br><span class="s">${esc(ll)}<br>${f.lords.length} Señores · ${f.heroes.length} Héroes</span></span></button>`;
+    }).join("")}</div></div>`).join("") || `<p class="empty">Nada coincide con “${esc(q)}”.</p>`;
+}
+// dentro de cada raza, el orden de la pantalla de selección de campaña del juego (frontend_factions.sort_order)
+function byOrd(a, b) { const x = D.factions[a], y = D.factions[b]; return (x.ord ?? 1e9) - (y.ord ?? 1e9) || x.n.localeCompare(y.n); }
+$("#q").addEventListener("input", renderFactions);
+$("#races").addEventListener("click", e => { const b = e.target.closest("[data-f]"); if (b) openFaction(+b.dataset.f); });
+
+function bundleSplit(bk) {
+  const b = D.bundles[bk]; if (!b) return {fac: [], lord: [], b: null};
+  const fac = [], lord = [];
+  for (const [ei, si, v] of b.e) (FACTION_SCOPE.test(D.scope_keys[si] || "") ? fac : lord).push([ei, si, v]);
+  return {fac, lord, b};
+}
+function factionEffectsHtml(f) {
+  const tr = f.trait ? D.bundles[f.trait] : null;
+  const items = [...(tr ? tr.e : [])].map(x => fxLi(...x)).join("");
+  const rasgos = (f.rasgos || []).map(t => `<li>${esc(t)}</li>`).join("");
+  const mec = (f.mec || []).map(t => `<li>${esc(t)}</li>`).join("");  // texto oficial de «Cómo se juega», tal cual
+  return {items, rasgos, mec};
+}
+function openFaction(fi) {
+  S.fac = fi; const f = D.factions[fi]; const fx = factionEffectsHtml(f);
+  const ll0 = f.ll.find(k => D.agents[k]); const lt = ll0 ? bundleSplit(D.agents[ll0].trait) : {fac: []};
+  const facItems = fx.items + lt.fac.map(x => fxLi(...x)).join("");
+  $("#fhead").innerHTML = `${facCrest(f)}
+    <div style="min-width:0"><h1>${esc(f.n)}</h1><div class="muted">${esc(f.race)}${f.dlc && f.dlc.length ? " · DLC: " + esc(f.dlc.join(", ")) : ""}</div>
+    <details class="fxd"${matchMedia("(max-width:760px)").matches ? "" : " open"}><summary>Efectos de facción y mecánicas</summary><div class="fx-cols">
+      <div class="fxbox"><h3>Efectos de facción</h3><ul class="fx">${facItems || ""}${fx.rasgos}</ul>${!facItems && !fx.rasgos ? `<p class="empty">El juego no lista efectos de facción para esta facción.</p>` : ""}</div>
+      ${fx.mec ? `<div class="fxbox"><h3>Mecánicas</h3><ul class="fx">${fx.mec}</ul></div>` : ""}
+    </div></details></div>`;
+  setTab(S.tab); show("v-char");
+}
+function charCard(k, extra) {
+  const a = D.agents[k];
+  return `<button class="card" data-a="${k}">${agentCrest(k)}<span class="t"><span class="n">${esc(a.n)}</span><br><span class="s">${a.leg ? `<span class="tag leg">Legendario</span> ` : ""}${extra || ""}<span class="tag">${esc(a.rol || AGENT_ES[a.t] || a.t)}</span></span></span></button>`;
+}
+function infoCard(k) {
+  const a = D.agents[k];
+  return `<div class="card info" title="${esc(a.d || a.ud || "")}">${agentCrest(k)}<span class="t"><span class="n">${esc(a.n)}</span><br><span class="s">${a.leg ? `<span class="tag leg">Legendario</span> ` : ""}<span class="tag">${esc(a.rol || AGENT_ES[a.t] || a.t || "")}</span> <span class="tag">Sin árbol</span></span></span></div>`;
+}
+function setTab(t) {
+  S.tab = t; $("#tab-lords").setAttribute("aria-selected", t === "lords"); $("#tab-heroes").setAttribute("aria-selected", t === "heroes"); $("#tab-units").setAttribute("aria-selected", t === "units");
+  if (t === "units") { renderUnitsTab(S.fac); return; }  // ejercito.js
+  const f = D.factions[S.fac], confed = new Set(f.confed || []), groups = [];
+  if (t === "lords") {
+    const own = f.lords.filter(k => f.ll.includes(k));
+    const conf = f.lords.filter(k => confed.has(k));
+    const rest = f.lords.filter(k => !own.includes(k) && !confed.has(k));
+    groups.push(["Señor legendario de la facción", own, ""], ["Por confederación", conf, `<span class="tag conf">Confederación</span> `,
+      "Señores legendarios de otras facciones que se consiguen al absorberlas (diplomacia, rituales o misiones, según la raza)." + (f.cn ? " " + esc(f.cn) : ""), !!f.cn],
+      ["Señores genéricos", rest, ""]);
+  } else {
+    groups.push(["Héroes legendarios", f.heroes.filter(k => D.agents[k].leg), ""], ["Héroes genéricos", f.heroes.filter(k => !D.agents[k].leg), ""]);
+  }
+  // personajes sin árbol (factions[i].infoL / infoH): solo su carta, sin abrir nada
+  const info = (t === "lords" ? f.infoL : f.infoH) || [];
+  groups.push(["Solo informativos", info.filter(k => D.agents[k]), "", "Aparecen en el juego pero el juego no les da árbol de habilidades, así que solo se muestra su carta.", false, true]);
+  // formas evolucionadas (factions[i].evo) como cartas propias justo detrás de su base, con su requisito
+  const evo = f.evo || {}, targets = new Set(Object.values(evo).flat().map(e => e.to)), used = new Set();
+  const expand = ks => { const out = [];
+    const add = (k, e, b) => { if (used.has(k) || !D.agents[k]) return; used.add(k); out.push([k, e, b]); for (const x of evo[k] || []) add(x.to, x, k); };
+    ks.filter(k => !targets.has(k)).forEach(k => add(k, null)); return out; };
+  const evoTag = (e, b) => `<span class="tag conf" title="${esc(D.agents[b].n + " → " + (e.n || "") + (e.d ? ": " + e.d : ""))}">Evolución</span> <span class="tag">Nivel ${e.lvl}</span> `;
+  $("#chars").innerHTML = groups.map(g => [g[0], g[5] ? g[1].map(k => [k]) : expand(g[1]), ...g.slice(2)]).filter(g => g[1].length || g[4]).map(([title, list, extra, note, , isInfo]) =>
+    `<div class="grp"><h3>${title} <span class="muted">(${list.length})</span></h3>${note ? `<p class="muted note">${note}</p>` : ""}<div class="grid">${list.map(([k, e, b]) => isInfo ? infoCard(k) : charCard(k, e ? evoTag(e, b) : extra)).join("")}</div></div>`).join("")
+    || `<p class="empty">Esta facción no tiene ${t === "lords" ? "señores" : "héroes"} con árbol de habilidades.</p>`;
+}
+$("#tab-lords").onclick = () => setTab("lords");
+$("#tab-heroes").onclick = () => setTab("heroes");
+$("#tab-units").onclick = () => setTab("units");
+$("#tab-army").onclick = () => openArmy(S.fac);
+$("#chars").addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (b) openTree(S.fac, b.dataset.a, null, null); });
+
+function openTree(fi, agentKey, rank, lvs, trait) {
+  S.fac = fi; S.agent = agentKey; S.tree = treeFor(agentKey, fi);
+  S.trait = trait != null && +trait < S.tree.traits.length ? +trait : -1;
+  S.rank = 1;  // el nivel se calcula a partir de los puntos (el del enlace se ignora)
+  S.lv = S.tree.vis.map((n, j) => lvs && j < lvs.length ? Math.min(B36.indexOf(lvs[j]), maxLv(n)) || 0 : 0);
+  S.sel = -1; S.spellLv = {}; validate();
+  renderSheet(); renderTree(); renderDetail(); renderSummary(); show("v-tree");
+}
+function changed() { renderSheetPoints(); renderTree(); renderDetail(); renderSummary(); try { history.replaceState(null, "", "#" + token()); } catch (e) {} }
+
+// Efectos que no dependen de los puntos: rasgo del señor, habilidades innatas, rasgo de reclutamiento elegido y
+// efectos de facción. Devuelve [etiqueta, [[efecto, ámbito, valor]...]] para la ficha y para «Unidades potenciadas».
+function fixedSources() {
+  const t = S.tree, a = t.a, f = t.f;
+  const home = f.ll.includes(S.agent);
+  const lt = home ? bundleSplit(a.trait) : {fac: [], lord: [], b: null};
+  const fll = f.ll.find(k => D.agents[k]), flt = fll ? bundleSplit(D.agents[fll].trait) : {fac: []};
+  const innate = t.hidden.map(n => SK(n.s)).filter(s => s.lv[0] && s.lv[0].e.length);
+  const chosen = S.trait >= 0 ? [SK(t.traits[S.trait].s)] : [];
+  const tr = f.trait ? D.bundles[f.trait] : null;
+  // las innatas se muestran en la ficha dentro del recuadro del señor: misma etiqueta (algunas se llaman [HIDDEN])
+  const lordLabel = lt.b && lt.b.n || (window.WH3T ? window.WH3T("Efectos del personaje") : "Efectos del personaje");
+  return [[lordLabel, [...lt.lord, ...innate.flatMap(s => s.lv[0].e)]], ...chosen.map(s => [s.n, s.lv[0].e]),
+    [window.WH3T ? window.WH3T("Efectos de facción") : "Efectos de facción", [...(tr ? tr.e : []), ...flt.fac]]];
+}
+// Evoluciones del juego (factions[i].evo): Heraldos → Gran Demonio Exaltado, Senda de la Gloria (marcas, Demonicidad)
+function evoBox(f, k) {
+  const ev = (f.evo || {})[k]; if (!ev || !ev.length) return "";
+  return `<div class="fxbox"><h3>Evoluciona a</h3><div class="evo">${ev.filter(e => D.agents[e.to]).map(e => `<button class="evob" data-evo="${esc(e.to)}" title="${esc(e.d || "")}">${agentCrest(e.to)}<span><b>${esc(e.n || D.agents[e.to].n)}</b><br><small>${esc(D.agents[e.to].n)}</small><br><small>Nivel ${e.lvl}</small>${e.army ? ` <small>· Al liderar un ejército</small>` : ""}</span></button>`).join("")}</div></div>`;
+}
+function renderSheet() {
+  const t = S.tree, a = t.a, f = t.f;
+  // El rasgo de inicio (faction_starting_general_effects) solo se aplica en su facción de origen; fuera de ella
+  // (confederado o desbloqueado) el señor solo trae sus habilidades innatas. Los efectos de facción son los del
+  // señor legendario de la facción elegida.
+  const home = f.ll.includes(S.agent);
+  const lt = home ? bundleSplit(a.trait) : {fac: [], lord: [], b: null};
+  const fll = f.ll.find(k => D.agents[k]), flt = fll ? bundleSplit(D.agents[fll].trait) : {fac: []};
+  const innate = t.hidden.map(n => SK(n.s)).filter(s => s.lv[0] && s.lv[0].e.length);
+  const chosen = S.trait >= 0 ? [SK(t.traits[S.trait].s)] : [];
+  const lordItems = lt.lord.map(x => fxLi(...x)).join("") + innate.concat(chosen).map(s => s.lv[0].e.map(x => fxLi(...x)).join("")).join("");
+  const traitBox = t.traits.length ? `<details class="fxbox traits"${S.trait < 0 ? " open" : ""}><summary class="lbl" style="cursor:pointer">Rasgo de reclutamiento: <b>${S.trait >= 0 ? esc(chosen[0].n) : "sin elegir"}</b></summary>
+      <p class="muted" style="font-size:12px;margin:4px 0">Al reclutarlo eliges uno de estos rasgos; solo el elegido se suma a sus efectos.</p>
+      <div class="tlist" role="radiogroup" aria-label="Rasgo de reclutamiento">${[{s: -1}].concat(t.traits).map((n, j) => { const k = j - 1, sk = k >= 0 ? SK(n.s) : null;
+        return `<label class="topt${k === S.trait ? " on" : ""}"><input type="radio" name="trait" value="${k}"${k === S.trait ? " checked" : ""}><span><b>${sk ? esc(sk.n) : "Sin rasgo"}</b>${sk && sk.lv[0] ? `<ul class="fx">${sk.lv[0].e.map(x => fxLi(...x)).join("")}</ul>` : ""}</span></label>`; }).join("")}</div></details>` : "";
+  $("#sheet").innerHTML = `
+    <div class="portrait">${agentCrest(S.agent, true)}
+      <div style="min-width:0"><h2>${esc(a.n)}</h2><div class="muted">${esc(a.rol || AGENT_ES[a.t] || a.t)} · ${esc(f.n)}</div>${a.leg ? `<span class="tag leg">Legendario</span> ` : ""}${(f.confed || []).includes(S.agent) ? `<span class="tag conf">Por confederación</span>` : ""}</div></div>
+    <div class="rankbox"><span class="lbl">Nivel del personaje</span>
+      <div class="lvnum"><output id="rankout">${S.rank}</output><span>/ ${a.maxr || 50}</span></div>
+      <div class="lvbar" aria-hidden="true"><span id="lvfill"></span></div>
+      <span class="muted" style="font-size:12px">Sube con cada punto que repartes</span></div>
+    <div class="pts" id="pts"></div>
+    <div class="btns"><button class="btn" id="copy">Copiar enlace</button><button class="btn ghost" id="reset">Reiniciar</button><button class="btn ghost" id="save">Guardar</button><button class="btn jump" id="jump">Ir al árbol ↓</button></div>
+    <div id="copymsg" class="copied" aria-live="polite"></div>
+    <input class="linkbox" id="linkbox" readonly aria-label="Enlace de la build" hidden>
+    <div><div class="lbl">Mis builds (este navegador)</div><div class="saved" id="saved"></div></div>
+    ${lt.b && (lt.b.n || lordItems) ? `<div class="fxbox"><h3>${esc(lt.b.n || "Efectos del señor")}</h3><ul class="fx">${lordItems}</ul>${lt.b.d ? `<p class="flav">${esc(lt.b.d)}</p>` : ""}</div>` :
+      lordItems ? `<div class="fxbox"><h3>Efectos del personaje</h3><ul class="fx">${lordItems}</ul></div>` : ""}
+    ${traitBox}
+    ${evoBox(f, S.agent)}
+    <details><summary class="lbl" style="cursor:pointer">Efectos de facción</summary>${(() => { const fx = factionEffectsHtml(f); const ff = fx.items + flt.fac.map(x => fxLi(...x)).join(""); return `<ul class="fx">${ff}${fx.rasgos}</ul>${!ff && !fx.rasgos ? `<p class="empty">Sin efectos listados.</p>` : ""}`; })()}</details>
+    ${a.d || a.ud ? `<p class="flav">${esc(a.d || a.ud)}</p>` : ""}`;
+  $("#sheet").querySelectorAll("[data-evo]").forEach(b => b.onclick = () => openTree(S.fac, b.dataset.evo, null, null));
+  $("#sheet").querySelectorAll("input[name=trait]").forEach(r => r.onchange = () => { S.trait = +r.value; renderSheet(); try { history.replaceState(null, "", "#" + token()); } catch (e) {} });
+  $("#reset").onclick = () => { S.lv = S.lv.map(() => 0); validate(); changed(); };
+  $("#copy").onclick = copyLink;
+  $("#save").onclick = saveBuild;
+  $("#jump").onclick = () => $(".simmain").scrollIntoView({behavior: "smooth", block: "start"});
+  renderSheetPoints(); renderSaved();
+}
+function renderSheetPoints() {
+  const tot = pointsTotal(), sp = spent();
+  $("#rankout").textContent = S.rank; $("#lvfill").style.width = (100 * (S.rank - 1) / Math.max(1, maxRank() - 1)) + "%";
+  $("#pts").innerHTML = `<div class="${sp > tot ? "over" : ""}"><span class="lbl">Gastados</span><b>${sp} / ${tot}</b></div><div><span class="lbl">Restantes</span><b>${Math.max(0, tot - sp)}</b></div>`;
+}
+async function copyLink() {
+  const link = shareLink(), msg = $("#copymsg"), box = $("#linkbox");
+  box.hidden = false; box.value = link;
+  try { await navigator.clipboard.writeText(link); msg.textContent = "Enlace copiado. Ábrelo para cargar esta build."; }
+  catch (e) { box.select(); msg.textContent = "Copia el enlace seleccionado."; }
+}
+const LS = "wh3-skill-builds";
+function loadSaved() { try { return JSON.parse(localStorage.getItem(LS) || "[]"); } catch (e) { return []; } }
+function storeSaved(list) { try { localStorage.setItem(LS, JSON.stringify(list)); } catch (e) {} }
+function saveBuild() {
+  const list = loadSaved(), t = token();
+  const name = `${D.agents[S.agent].n} · nivel ${S.rank} · ${spent()} pts`;
+  storeSaved([{name, t, when: new Date().toISOString().slice(0, 10)}, ...list.filter(x => x.t !== t)].slice(0, 40));
+  renderSaved(); $("#copymsg").textContent = "Build guardada en este navegador.";
+}
+function renderSaved() {
+  const list = loadSaved();
+  $("#saved").innerHTML = list.length ? list.map((b, i) => `<div><button class="l" data-t="${esc(b.t)}" title="${esc(b.name)}">${esc(b.name)}</button><span class="muted">${esc(b.when)}</span><button class="x" data-del="${i}" aria-label="Borrar">✕</button></div>`).join("") : `<span class="empty">Aún no has guardado ninguna.</span>`;
+}
+document.addEventListener("click", e => {
+  const l = e.target.closest("#saved [data-t]"); if (l) fromToken(l.dataset.t);
+  const d = e.target.closest("#saved [data-del]"); if (d) { const list = loadSaved(); list.splice(+d.dataset.del, 1); storeSaved(list); renderSaved(); }
+});
+
+// ---------- árbol con el aspecto del juego ----------
+// Cada habilidad es una placa de ui.pack (skills_tab_*.png, 185×67) teñida con el color de su categoría, con el medallón
+// (skills_tab_ornament.png) y el icono de la habilidad a la izquierda, como en character_details_panel_skills.twui.xml.
+const UI = window.WH3UI || {}, SKI = window.WH3SKICONS || {img: [], a: {}}, FXI = window.WH3FXICONS || {img: []};
+const FXMAP = FXI[window.WH3LANG === "en" ? "en" : "es"] || {};
+for (const [k, v] of Object.entries(UI)) document.documentElement.style.setProperty("--t-" + k.replace(/_/g, "-"), `url("${v}")`);
+const PX = 282, PY = 122, PADX = 40, PADY = 30, SKW = 224, SKH = 67;
+function nodeState(j) {
+  const n = S.tree.vis[j], l = S.lv[j] || 0, m = maxLv(n);
+  const cls = ["sk"];
+  if (l > 0) cls.push("taken"); if (l >= m) cls.push("full");
+  if (lockedBy(j) >= 0 && !l) cls.push("excl");
+  else if (!isAuto(n) && l < m) {
+    if (!prereq(j)) cls.push("lock");
+    else if (nextRank() < rankReq(n, l + 1)) cls.push("norank");
+    else if (spent() < pointsTotal()) cls.push("avail");
+  }
+  if (j === S.sel) cls.push("sel");
+  return cls.join(" ");
+}
+// Etiqueta de cada fila: el juego solo tiene tres categorías (Personaje, Batalla, Campaña) que abarcan varias filas.
+// Se rotula la categoría una vez por bloque; las filas de hechizos y de combate del personaje llevan su propia etiqueta.
+function rowLabels(t) {
+  let prev = "";
+  return t.rows.map(row => {
+    const cat = catFor(row, S.agent);
+    const ns = t.vis.filter(n => n.row === row);
+    const half = f => ns.length > 1 && ns.filter(f).length * 2 >= ns.length;
+    const most = f => ns.length > 1 && ns.filter(f).length * 2 > ns.length;
+    const spells = half(n => spellsOf(SK(n.s)).length);
+    // «Combate»: fila del bloque Personaje donde la mayoría de habilidades mejoran estadísticas de combate del propio personaje
+    const combat = !spells && cat.col.toUpperCase() === "FFB62F" && most(n => SK(n.s).lv.some(L => L.e.some(([ei]) => D.effects[ei] && D.effects[ei].cs)));
+    const lab = spells ? "Hechizos" : combat ? "Combate" : cat.n;
+    const shown = lab === prev ? "" : lab; prev = lab;
+    return {cat, lab: shown, cont: !shown};
+  });
+}
+
+// El juego recolorea el disco de fondo de los iconos genéricos (dorado = personaje, rojo = batalla, azul = campaña)
+// al color de la fila; los iconos con arte propio (hechizos, monturas...) se dejan tal cual.
+const tintCache = new Map(), tintWait = new Map();
+const hueOf = (r, g, b) => { const M = Math.max(r, g, b), m = Math.min(r, g, b), d = M - m; if (!d) return [0, 0, M / 255];
+  const h = M === r ? ((g - b) / d + 6) % 6 : M === g ? (b - r) / d + 2 : (r - g) / d + 4; return [h * 60, d / M, M / 255]; };
+const hsv2rgb = (h, s, v) => { const f = n => { const k = (n + h / 60) % 6; return Math.round(255 * (v - v * s * Math.max(0, Math.min(k, 4 - k, 1)))); }; return [f(5), f(3), f(1)]; };
+const hdist = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+const DISC_HUES = [30, 352, 185];
+function recolor(img, col) {
+  const c = document.createElement("canvas"); c.width = c.height = 72;
+  const g = c.getContext("2d"); g.drawImage(img, 0, 0, 72, 72);
+  const d = g.getImageData(0, 0, 72, 72), p = d.data, cnt = [0, 0, 0]; let tot = 0;
+  for (let y = 0; y < 72; y++) for (let x = 0; x < 72; x++) {
+    const r = Math.hypot(x - 37.5, y - 34); if (r < 18 || r > 23) continue;
+    const o = (y * 72 + x) * 4; if (p[o + 3] < 200) continue;
+    const [h, s, v] = hueOf(p[o], p[o + 1], p[o + 2]); if (s < .35 || v < .16) continue;
+    tot++; DISC_HUES.forEach((b, i) => { if (hdist(h, b) < 22) cnt[i]++; });
+  }
+  const best = cnt.indexOf(Math.max(...cnt));
+  if (tot < 20 || cnt[best] / tot < .45) return null;
+  const tc = parseInt(col.replace("#", ""), 16), [th, ts] = hueOf(tc >> 16, (tc >> 8) & 255, tc & 255), src = DISC_HUES[best];
+  if (hdist(th, src) < 10) return null;
+  for (let o = 0; o < p.length; o += 4) {
+    if (!p[o + 3]) continue;
+    const [h, s, v] = hueOf(p[o], p[o + 1], p[o + 2]);
+    if (s < .25 || hdist(h, src) > 26) continue;
+    const dh = ((h - src + 540) % 360) - 180;
+    const [r, gg, b] = hsv2rgb((th + dh + 360) % 360, Math.min(1, s * (ts < .75 ? .85 : 1)), v); p[o] = r; p[o + 1] = gg; p[o + 2] = b;
+  }
+  g.putImageData(d, 0, 0); return c.toDataURL();
+}
+function iconSrc(i, col) {
+  const k = i + col; if (tintCache.has(k)) return [tintCache.get(k), ""];
+  if (!tintWait.has(k)) {
+    tintWait.set(k, 1);
+    const im = new Image();
+    im.onload = () => {
+      let url = SKI.img[i]; try { url = recolor(im, col) || url; } catch (e) {}
+      tintCache.set(k, url); tintWait.delete(k);
+      for (const el of document.querySelectorAll(`img[data-tk="${k}"]`)) { el.src = url; el.classList.remove("pend"); }
+    };
+    im.src = SKI.img[i];
+  }
+  return [SKI.img[i], k];
+}
+function skIconHtml(s, col, cls) {
+  const i = SKI.a[s.i];
+  if (i === undefined) return `<span class="${cls} ico">${svgIcon(iconFor("", s.i, 0))}</span>`;
+  const [src, k] = iconSrc(i, col);
+  return `<img class="${cls}${k ? " pend" : ""}" ${k ? `data-tk="${k}" ` : ""}src="${src}" alt="">`;
+}
+// Grupos del juego: las habilidades de las que otra pide N puntos «entre ellas» van en un recuadro común
+function treeGroups(t) {
+  const groups = new Map();
+  t.vis.forEach((n, j) => {
+    if (n.req_sub.length < 2) return;
+    const ps = [...n.req_sub].sort((a, b) => a - b);
+    if (new Set(ps.map(p => t.vis[p].row)).size !== 1) return;
+    const k = ps.join(",");
+    if (!groups.has(k)) groups.set(k, {m: ps, kids: []});
+    groups.get(k).kids.push(j);
+  });
+  return [...groups.values()];
+}
+function renderTree() {
+  const t = S.tree, labels = rowLabels(t), ri = new Map(t.rows.map((r, i) => [r, i]));
+  const X = n => PADX + n.x * PX, Y = n => PADY + ri.get(n.row) * PY;
+  const W = PADX + t.ncols * PX + 10, H = PADY * 2 + t.rows.length * PY - (PY - SKH) + 6;
+  const groups = treeGroups(t), inBox = new Map();
+  let boxes = "";
+  for (const g of groups) {
+    const xs = g.m.map(p => X(t.vis[p])), y = Y(t.vis[g.m[0]]);
+    g.x0 = Math.min(...xs) - 12; g.x1 = Math.max(...xs) + SKW + 12; g.y0 = y - 24; g.y1 = y + SKH + 24;
+    for (const p of g.m) if (!inBox.has(p)) inBox.set(p, g);
+    const need = Math.max(...g.kids.map(c => Math.max(1, t.vis[c].req))), have = g.m.reduce((x, p) => x + (S.lv[p] || 0), 0);
+    boxes += `<div class="gbox${have ? " on" : ""}${have >= need ? " ok" : ""}" style="left:${g.x0}px;top:${g.y0}px;width:${g.x1 - g.x0}px;height:${g.y1 - g.y0}px">${need > 1 ? `<span class="need" title="Puntos necesarios en este grupo">${Math.min(have, need)}/${need}</span>` : ""}</div>`;
+  }
+  // flechas: de la habilidad (o del recuadro) que se exige a la que se desbloquea
+  const segs = new Map();
+  const seg = (x1, y1, x2, y2, on) => { const k = [x1, y1, x2, y2].join(","); segs.set(k, (segs.get(k) || on) || on); };
+  t.vis.forEach((n, j) => {
+    const cx = X(n), cy = Y(n) + SKH / 2 - 2, ok = prereq(j);
+    const myBox = inBox.get(j);
+    const tgt = p => myBox && !myBox.m.includes(p) && t.vis[p].row === n.row ? myBox.x0 : cx + 28;
+    const g = groups.find(g => g.kids.includes(j));
+    if (g) seg(g.x1, cy, cx + 28, cy, ok);
+    for (const p of [...n.req_all, ...(g ? [] : n.req_sub)]) {
+      const pn = t.vis[p], pb = inBox.get(p);
+      const sx = pb && !pb.m.includes(j) && pb !== myBox ? pb.x1 : X(pn) + SKW + 2;
+      if (pn.row === n.row && sx < tgt(p)) seg(sx, cy, tgt(p), cy, S.lv[p] > 0 || ok);
+      else seg(X(pn) + 120, Y(pn) + SKH + (pn.row < n.row ? 4 : -SKH - 4), cx + 28, cy, S.lv[p] > 0);
+    }
+  });
+  let svg = "";
+  for (const [k, on] of segs) {
+    const [x1, y1, x2, y2] = k.split(",").map(Number), col = on ? "#2f86c4" : "#4a4f5a";
+    if (y1 === y2) {
+      svg += `<line x1="${x1 + 2}" y1="${y1}" x2="${x2 - 12}" y2="${y2}" stroke="${col}" stroke-width="3" stroke-dasharray="11 5"/><path d="M${x2 - 14} ${y2 - 6}L${x2 - 2} ${y2}L${x2 - 14} ${y2 + 6}z" fill="${col}"/>`;
+    } else {
+      svg += `<path d="M${x1} ${y1} C${x1} ${(y1 + y2) / 2} ${x2 - 60} ${y2} ${x2 - 12} ${y2}" stroke="${col}" stroke-width="2.5" stroke-dasharray="9 5" fill="none"/><path d="M${x2 - 14} ${y2 - 6}L${x2 - 2} ${y2}L${x2 - 14} ${y2 + 6}z" fill="${col}"/>`;
+    }
+  }
+  const nodes = t.vis.map((n, j) => {
+    const s = SK(n.s), l = S.lv[j] || 0, m = maxLv(n), col = "#" + catFor(n.row, S.agent).col;
+    const cls = nodeState(j), gray = /norank|excl/.test(cls);
+    const nextR = l < m ? rankReq(n, l + 1) : 0;
+    const g = n.req_sub.length === 1 ? 1 : 0;  // un solo padre «por puntos»: el juego lo marca como prerrequisito
+    // tamaño de letra según el nombre: las palabras largas («¡Reagrupamiento!») no caben a 18 px en 118 px
+    const name = s.n, word = Math.max(...name.split(/\s+/).map(w => w.length));
+    const sz = name.length > 30 || word > 13 ? " xs" : name.length > 19 || word > 10 ? " s" : "";
+    const dots = Array.from({length: Math.min(m, 5)}, (_, k) => `<i class="${k < l ? "on" : ""}"></i>`).join("");
+    const needPts = g && n.req > 1 ? `<span class="gt">${Math.min(S.lv[n.req_sub[0]] || 0, n.req)}/${n.req}</span>` : "";
+    return `<button class="${cls}" data-j="${j}" style="left:${X(n)}px;top:${Y(n)}px;--c:${gray ? "#8c8c8c" : col}" aria-label="${esc(name)} ${l}/${m}">
+      <span class="pl"></span><span class="orn"></span>${skIconHtml(s, gray ? "#8c8c8c" : col, "ic")}
+      <span class="nm${sz}">${esc(name)}</span><span class="lvs">${dots}</span>
+      ${l > 0 ? `<span class="ck"></span>` : ""}${/norank/.test(cls) ? `<span class="pad"></span><span class="rq" title="Nivel necesario">${nextR}</span>` : ""}${/excl/.test(cls) ? `<span class="chn"></span>` : ""}${isAuto(n) ? `<span class="au" title="Gratis al llegar al nivel ${s.auto}"></span>` : ""}${needPts}</button>`;
+  }).join("");
+  const labs = labels.map((L, i) => {
+    if (!L.lab) return "";
+    let k = i; while (k + 1 < labels.length && !labels[k + 1].lab) k++;
+    const top = PADY + i * PY - 20, bot = PADY + k * PY + SKH + 20;
+    return `<div class="rowlab" style="top:${top}px;height:${bot - top}px">${esc(L.lab)}</div>`;
+  }).join("");
+  $("#rows").style.width = W + "px"; $("#rows").style.height = H + "px";
+  $("#rows").innerHTML = boxes + `<svg class="glinks" width="${W}" height="${H}" aria-hidden="true">${svg}</svg>` + labs + nodes;
+  if (S.hover >= 0) showTip(S.hover);
+}
+function drawLinks() {}       // las flechas se dibujan en renderTree con coordenadas fijas
+function placeRowLabels() {}
+
+// ---------- tooltip como el del juego ----------
+function reqList(j) {
+  const n = S.tree.vis[j], s = SK(n.s), l = S.lv[j] || 0, m = maxLv(n), reqs = [];
+  for (const p of n.req_all) reqs.push(`<div class="${S.lv[p] > 0 ? "ok" : "no"}">${S.lv[p] > 0 ? "✔" : "✘"} Requiere: ${esc(SK(S.tree.vis[p].s).n)}</div>`);
+  if (n.req_sub.length) {
+    const need = Math.max(1, n.req), have = n.req_sub.reduce((x, p) => x + (S.lv[p] || 0), 0);
+    reqs.push(`<div class="${have >= need ? "ok" : "no"}">${have >= need ? "✔" : "✘"} ${need} punto${need > 1 ? "s" : ""} en: ${esc(n.req_sub.map(p => SK(S.tree.vis[p].s).n).join(", "))} (${have}/${need})</div>`);
+  }
+  const lb = lockedBy(j);
+  if (lb >= 0) reqs.push(`<div class="no">✘ Bloqueada por haber elegido ${esc(SK(S.tree.vis[lb].s).n)}</div>`);
+  else if (n.locks.length) reqs.push(`<div class="muted">Excluyente con: ${esc([...new Set(n.locks.map(([sk]) => { const x = S.tree.vis.find(v => v.s === sk); return x ? SK(x.s).n : ""; }).filter(Boolean))].join(", "))}</div>`);
+  if (isAuto(n)) reqs.push(`<div class="${S.rank >= s.auto ? "ok" : "no"}">Se obtiene gratis al llegar al nivel ${s.auto}</div>`);
+  else if (l < m) { const r = rankReq(n, l + 1); if (r > 1) reqs.push(`<div class="${nextRank() >= r ? "ok" : "no"}">${nextRank() >= r ? "✔" : "✘"} Requiere nivel ${r}</div>`); }
+  if (n.anc) reqs.push(`<div class="muted">Necesita un objeto o misión para desbloquearse en campaña</div>`);
+  return reqs;
+}
+function tipHtml(j) {
+  const n = S.tree.vis[j], s = SK(n.s), l = S.lv[j] || 0, m = maxLv(n), lk = Math.max(1, l) - 1, L = s.lv[lk];
+  const units = new Map();
+  const ef = (L ? L.e : []).map(([ei, si, v]) => {
+    const f = fmtEffect(ei, si, v); if (!f) return "";
+    if (f.e.us || f.e.ur) { const us = unitsFor(ei, S.tree.ri); for (const u of us) if (!units.has(u)) units.set(u, us.ix.get(u)); }
+    const ic = FXMAP[ei] !== undefined ? `<img src="${FXI.img[FXMAP[ei]]}" alt="">` : `<span class="dot"></span>`;
+    return `<div class="ef${f.good ? "" : " bad"}">${ic}<span>${esc(f.t)}${f.sc ? ` <span class="scope">(${esc(f.sc)})</span>` : ""}</span></div>`;
+  }).join("");
+  const sp = spellsOf(s).map(ai => `<div class="ef"><span class="dot"></span><span>Hechizo: ${esc(D.abilities[ai].n)}</span></div>`).join("");
+  const us = [...units.entries()];
+  const reqs = reqList(j);
+  return `<h4>${esc(s.n)}</h4><div class="sub">${esc(catFor(n.row, S.agent).n)} · ${l}/${m} puntos</div>
+    ${s.d ? `<p class="fl">${esc(s.d)}</p>` : ""}${L && L.d && L.d !== s.d ? `<p class="fl">${esc(L.d)}</p>` : ""}${ef || sp ? ef + (ef ? "" : sp) : `<div class="ef"><span class="dot"></span><span>Sin efectos visibles</span></div>`}
+    ${us.length && window.unitThumb ? `<div class="ut">Las siguientes unidades recibirán bonificaciones de esta habilidad:</div><div class="uc">${us.slice(0, 20).map(([u, ix]) => window.unitThumb(ix).replace("<img", `<img title="${esc(u)}"`)).join("")}${us.length > 20 ? `<span class="more">y ${us.length - 20} más</span>` : ""}</div>` : ""}
+    ${reqs.length ? `<div class="rq">${reqs.join("")}</div>` : ""}
+    <div class="hint">${canAdd(j) ? "Clic: añadir punto" : ""}${canAdd(j) && l && !isAuto(n) ? " · " : ""}${l && !isAuto(n) ? "Clic derecho: quitar" : ""}</div>`;
+}
+const tip = document.createElement("div"); tip.className = "gtt"; tip.hidden = true; tip.setAttribute("role", "tooltip"); document.body.appendChild(tip);
+function showTip(j) {
+  const el = document.querySelector(`#rows [data-j="${j}"]`); if (!el || matchMedia("(hover: none)").matches) return;
+  tip.innerHTML = tipHtml(j); tip.hidden = false;
+  const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight, vw = innerWidth, vh = innerHeight;
+  let x = r.left + r.width * .45 - w / 2, y = r.bottom + 4;
+  if (y + h > vh - 8) y = r.top - h - 4;
+  if (y < 8) y = Math.max(8, vh - h - 8);
+  tip.style.left = Math.max(8, Math.min(vw - w - 8, x)) + "px"; tip.style.top = y + "px";
+}
+function hideTip() { tip.hidden = true; }
+// zoom del árbol (se recuerda en este navegador)
+(() => {
+  const ZK = "wh3-tree-zoom"; let z = 1; try { z = +localStorage.getItem(ZK) || (innerWidth < 1400 ? .8 : 1); } catch (e) {}
+  const set = v => { z = Math.round(Math.max(.5, Math.min(1.4, v)) * 10) / 10; $("#rows").style.setProperty("--z", z); $("#zval").textContent = Math.round(z * 100) + "%"; try { localStorage.setItem(ZK, z); } catch (e) {} hideTip(); };
+  set(z);
+  $("#zin").onclick = () => set(z + .1); $("#zout").onclick = () => set(z - .1);
+  $("#treescroll").addEventListener("wheel", e => { if (!e.ctrlKey) return; e.preventDefault(); set(z + (e.deltaY < 0 ? .1 : -.1)); }, {passive: false});
+})();
+$("#rows").addEventListener("click", e => { const b = e.target.closest("[data-j]"); if (!b) return; const j = +b.dataset.j; S.sel = j; if (canAdd(j)) add(j); else { renderTree(); renderDetail(); } });
+// Arrastrar con el ratón para moverse por el árbol; un arrastre no cuenta como clic
+(() => {
+  const sc = $("#treescroll"); let drag = null;
+  sc.addEventListener("pointerdown", e => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    drag = {x: e.clientX, y: e.clientY, l: sc.scrollLeft, t: sc.scrollTop, moved: false};
+  });
+  window.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+    drag.moved = true; sc.classList.add("dragging");
+    sc.scrollLeft = drag.l - dx; sc.scrollTop = drag.t - dy; hideTip();
+  });
+  window.addEventListener("pointerup", () => {
+    if (drag && drag.moved) { S.dragged = true; setTimeout(() => { S.dragged = false; }, 0); }
+    drag = null; sc.classList.remove("dragging");
+  });
+  sc.addEventListener("click", e => { if (S.dragged) { e.stopPropagation(); e.preventDefault(); } }, true);
+})();
+$("#rows").addEventListener("contextmenu", e => { const b = e.target.closest("[data-j]"); if (!b) return; e.preventDefault(); S.sel = +b.dataset.j; remove(S.sel); });
+$("#rows").addEventListener("mouseover", e => { const b = e.target.closest("[data-j]"); if (!b) { S.hover = -1; hideTip(); return; } if (+b.dataset.j !== S.hover) { S.hover = +b.dataset.j; showTip(S.hover); } });
+$("#rows").addEventListener("mouseleave", () => { S.hover = -1; hideTip(); });
+$("#treescroll").addEventListener("scroll", hideTip);
+
+// ---------- ficha de hechizo ----------
+const SPELL_TY = {"direct damage": "Daño directo", "bombardment": "Bombardeo", "vortex": "Vórtice", "magic missiles": "Proyectiles mágicos", "magic missile": "Proyectil mágico",
+  "wind": "Viento", "area of augments": "Potenciación de área", "augment": "Potenciación", "area of hexes": "Maleficio de área", "hex": "Maleficio",
+  "breath": "Aliento", "regeneration": "Regeneración", "summon": "Invocación", "augment of the winds": "Potenciación de los vientos",
+  "area of regeneration": "Regeneración de área", "area of direct damage": "Daño directo de área"};
+const TG_ES = {S: "uno mismo", A: "aliados", E: "enemigos", G: "suelo"};
+// Hechizos que menciona una habilidad: base (no son la sobrecarga de otro) y su versión de sobrecarga
+function spellsOf(s) {
+  const set = new Set();
+  for (const L of s.lv) for (const [ei] of L.e) { const e = D.effects[ei]; if (!e) continue; for (const a of e.ab || []) set.add(a); for (const [a] of e.abm || []) set.add(a); }
+  const ovs = new Set([...set].map(a => D.abilities[a] && D.abilities[a].ov).filter(x => x >= 0));
+  return [...set].filter(a => { const x = D.abilities[a]; return x && !ovs.has(a) && (x.src === "spell" || x.ov >= 0) && !x.pas; });
+}
+function modsAt(L) {
+  const M = new Map();
+  for (const [ei, , v] of L ? L.e : []) for (const [a, m] of (D.effects[ei] && D.effects[ei].abm) || []) {
+    if (!M.has(a)) M.set(a, {}); const o = M.get(a); o[m] = (o[m] || 0) + v;
+  }
+  return M;
+}
+function statBox(label, base, val, unit, lowerBetter) {
+  const r = x => fmtNum(Math.round(x * 10) / 10);
+  const ch = Math.abs(val - base) > 1e-6;
+  const cls = !ch ? "" : ((val < base) === !!lowerBetter ? "up" : "down");
+  return `<div>${label}<b class="${cls}">${r(val)}${unit}${ch ? `<s>${r(base)}${unit}</s>` : ""}</b></div>`;
+}
+function phaseLines(p) {
+  if (!p) return "";
+  const out = [];
+  const st = p.st.map(([s, v, how]) => {
+    const val = how === "mult" ? `${v >= 1 ? "+" : ""}${Math.round((v - 1) * 100)}%` : `${v >= 0 ? "+" : ""}${fmtNum(v)}`;
+    return `<span class="${(how === "mult" ? v >= 1 : v >= 0) ? "pos" : "neg"}">${esc(statName(s))} ${val}</span>`;
+  });
+  st.push(...(p.at || []).map(i => D.attributes[i] ? `<span class="pos">${esc(D.attributes[i].n)}</span>` : "").filter(Boolean));
+  if (p.dmg) out.push(`Daño ${p.dmg}${p.freq ? ` cada ${p.freq} s` : ""}${p.maxe > 0 ? ` (hasta ${p.maxe} entidades)` : ""}`);
+  if (p.heal) out.push(`<span class="pos">Curación ${fmtNum(p.heal * 100)}% de la vida${p.freq ? ` cada ${p.freq} s` : ""}</span>`);
+  if (p.res) out.push(`<span class="pos">Resucita caídos</span>`);
+  if (p.barrier) out.push(`<span class="pos">Recupera barrera ${fmtNum(p.barrier)}</span>`);
+  if (p.mag) out.push(`<span class="pos">Ataques mágicos</span>`);
+  if (p.fire) out.push(`<span class="pos">Ataques de fuego</span>`);
+  if (p.rech) out.push(`Recarga de habilidades ${p.rech > 0 ? "+" : ""}${fmtNum(p.rech)} s`);
+  if (p.root) out.push(`<span class="neg">No puede moverse</span>`);
+  const tgt = p.tgt ? [...p.tgt].map(c => TG_ES[c]).filter(Boolean).join(", ") : "";
+  return `<div>${tgt ? `<span class="k">Afecta a ${tgt}${p.dur > 0 ? ` · ${p.dur} s` : ""}:</span> ` : p.dur > 0 ? `<span class="k">${p.dur} s:</span> ` : ""}${[...st, ...out].join(", ") || "—"}</div>`;
+}
+function projLines(p, label, times) {
+  if (!p) return "";
+  const n = (times || 1) * p.n * p.vol * p.burst;
+  const tags = [p.mag ? "mágico" : "", p.fire ? "de fuego" : ""].filter(Boolean).join(", ");
+  let h = `<div><span class="k">${label}:</span> ${p.dmg + p.ap} de daño por impacto (${p.dmg} base + ${p.ap} perforante)${n > 1 ? ` × ${n}` : ""}${tags ? ` · ${tags}` : ""}${p.bi ? ` · +${p.bi} contra infantería` : ""}${p.bl ? ` · +${p.bl} contra grandes` : ""}</div>`;
+  if (p.ex) h += `<div><span class="k">Explosión:</span> ${p.ex.dmg + p.ex.ap} de daño (${p.ex.dmg} + ${p.ex.ap} perforante), radio ${p.ex.r} m</div>${phaseLines(p.ex.ph)}`;
+  else if (p.ph) h += phaseLines(p.ph);
+  if (p.vx) h += vortexLines(p.vx);
+  return h;
+}
+function vortexLines(v) {
+  if (!v) return "";
+  const tags = [v.mag ? "mágico" : "", v.fire ? "de fuego" : ""].filter(Boolean).join(", ");
+  return `<div><span class="k">Vórtice${v.n > 1 ? ` ×${v.n}` : ""}:</span> ${v.dmg + v.ap} de daño (${v.dmg} + ${v.ap} perforante), radio ${v.r} m, ${v.dur} s${v.vel ? `, velocidad ${v.vel}` : ""}${tags ? ` · ${tags}` : ""}</div>${phaseLines(v.ph)}`;
+}
+function spellCard(ai, M, isOv) {
+  const a = D.abilities[ai], o = M.get(ai) || {};
+  const pct = k => 1 + (o[k] || 0) / 100;
+  const mana = Math.max(0, (a.mana + (o.cost_mod || 0)) * pct("cost_percentage_mod"));
+  const grid = [];
+  if (a.mana > 0 || o.cost_mod) grid.push(statBox("Vientos", a.mana, mana, "", true));
+  if (a.rc > 0) grid.push(statBox("Recarga", a.rc, a.rc * pct("recharge_mod"), " s", true));
+  if (a.dur > 0) grid.push(statBox("Duración", a.dur, a.dur * pct("active_time_mod"), " s"));
+  if (a.rng > 0) grid.push(statBox("Alcance", a.rng, a.rng * pct("target_intercept_range_mod"), " m"));
+  if (a.erng > 0) grid.push(statBox("Radio de efecto", a.erng, a.erng * pct("effect_range_mod"), " m"));
+  if (a.uses > 0) grid.push(statBox("Usos", a.uses, a.uses + (o.uses_mod || 0), ""));
+  if (a.mis > 0 || o.miscast_percentage_mod) grid.push(statBox("Prob. de fallo", a.mis * 100, a.mis * 100 + (o.miscast_percentage_mod || 0), "%", true));
+  if (a.wind > 0) grid.push(`<div>Preparación<b>${fmtNum(a.wind)} s</b></div>`);
+  const tg = [...(a.tg || "")].map(c => TG_ES[c]).filter(Boolean).join(", ");
+  const body = [...(a.ph || []).map(phaseLines), projLines(a.proj, "Proyectil"),
+    a.bomb ? projLines(a.bomb.p, `Bombardeo (${a.bomb.n} proyectil${a.bomb.n > 1 ? "es" : ""}, dispersión ${a.bomb.r} m)`, a.bomb.n) : "",
+    vortexLines(a.vx), a.spawn ? `<div><span class="k">Invoca:</span> ${esc(a.spawn)}</div>` : ""].join("");
+  return `<div class="spell${isOv ? " ov" : ""}"><div class="sh"><span class="sn">${isOv ? "Sobrecarga · " : ""}${esc(a.n)}</span><span class="sty">${abxType(ai) || esc(SPELL_TY[a.ty] || a.ty || "")}${a.src === "bound" ? " · ligado" : ""}</span></div>
+    ${grid.length ? `<div class="sgrid">${grid.join("")}</div>` : ""}${tg || abxLines(ai) ? `<div class="sblk">${tg ? `<div><span class="k">Objetivo:</span> ${tg}</div>` : ""}${abxLines(ai)}</div>` : ""}
+    ${body ? `<div class="sblk">${body}</div>` : ""}${a.d ? `<p class="flav" style="margin:0">${esc(a.d)}</p>` : ""}</div>`;
+}
+function spellSection(j, s, l) {
+  const spells = spellsOf(s); if (!spells.length) return {html: "", shown: new Set()};
+  S.spellLv = S.spellLv || {};
+  const show = Math.min(s.lv.length, S.spellLv[j] || Math.max(1, l));
+  const M = modsAt(s.lv[show - 1]);
+  const shown = new Set();
+  const cards = spells.map(ai => {
+    const a = D.abilities[ai]; shown.add(ai); if (a.ov >= 0) shown.add(a.ov);
+    const ovOn = a.ov >= 0 && (M.get(ai) || {}).enable_overchage;
+    const ovLater = a.ov >= 0 && !ovOn && s.lv.findIndex(L => (modsAt(L).get(ai) || {}).enable_overchage) + 1;
+    return spellCard(ai, M, false) + (ovOn ? spellCard(a.ov, M, true) : ovLater > 0 ? `<p class="muted" style="margin:0;font-size:13px">La sobrecarga se desbloquea con ${ovLater} puntos en esta habilidad.</p>` : "");
+  }).join("");
+  const tabs = s.lv.length > 1 ? `<div class="slv"><span class="lbl">Ver con</span>${s.lv.map((_, k) => `<button data-slv="${k + 1}" aria-pressed="${k + 1 === show}">${k + 1} punto${k ? "s" : ""}${k + 1 === l ? " ✓" : ""}</button>`).join("")}</div>` : "";
+  return {html: `<div class="lbl">Ficha del hechizo</div>${tabs}${cards}<p class="muted" style="margin:0;font-size:12px">Valores en verde o rojo: cambiados por los puntos invertidos en esta habilidad; tachado, el valor base.</p>`, shown};
+}
+function effectBlock(list, ri, skip) {
+  return list.map(([ei, si, v]) => {
+    const f = fmtEffect(ei, si, v); if (!f) return "";
+    const us = (f.e.us || f.e.ur) ? unitsFor(ei, ri) : [];
+    const ab = (f.e.ab || []).filter(a => !(skip && skip.has(a))).map(abilityHtml).join("");
+    const at = (f.e.at || []).map(i => D.attributes[i] && D.attributes[i].d ? `<div class="flav">${esc(D.attributes[i].n)}: ${esc(D.attributes[i].d)}</div>` : "").join("");
+    return `<li><span class="${f.good ? "pos" : "neg"}">${esc(f.t)}</span>${f.sc ? ` <span class="scope">(${esc(f.sc)})</span>` : ""}
+      ${us.length ? `<div class="units"><b>Unidades:</b> ${us.slice(0, 18).map(n => `<span class="uitem">${window.unitThumb ? window.unitThumb(us.ix.get(n)) : ""}${esc(n)}</span>`).join("")}${us.length > 18 ? ` y ${us.length - 18} más` : ""}</div>` : ""}${at}${ab}</li>`;
+  }).join("");
+}
+function renderDetail(hj) {
+  const j = hj >= 0 ? hj : S.sel, el = $("#detail");
+  if (j === undefined || j < 0) {
+    el.innerHTML = `<h3>Detalles de la habilidad</h3><p class="empty">Pasa el ratón por una habilidad para ver su ficha, como en el juego. Al hacer clic se invierte un punto y aquí aparecen todos los detalles: requisitos, unidades afectadas y la ficha completa de los hechizos.</p>`;
+    return;
+  }
+  const n = S.tree.vis[j], s = SK(n.s), l = S.lv[j] || 0, m = maxLv(n), cat = catFor(n.row, S.agent);
+  const reqs = reqList(j);
+  const sp = spellSection(j, s, l);
+  // solo la mejora activa más alta (sin puntos, la del primer punto); cada punto sustituye al anterior
+  const lk = Math.max(1, l) - 1;
+  const levels = s.lv.slice(lk, lk + 1).map((L, i) => {
+    const k = lk + i, r = rankReq(n, k + 1);
+    return `<div class="lv ${k + 1 === l ? "cur" : ""}"><div class="h"><span>${l ? "Activo · " : "Al invertir · "}Punto ${k + 1}${m > 1 ? " de " + m : ""}${L.n ? " · " + esc(L.n) : ""}</span><span class="${S.rank >= r ? "" : "neg"}">${r > 1 ? "Requiere nivel " + r : ""}</span></div>
+      <ul class="fx">${effectBlock(L.e, S.tree.ri, sp.shown) || `<li class="muted">Sin efectos visibles</li>`}</ul>${L.d ? `<p class="flav">${esc(L.d)}</p>` : ""}</div>`;
+  }).join("");
+  el.innerHTML = `<div class="hd"><span class="dico">${skIconHtml(s, "#" + cat.col, "")}</span><div style="min-width:0"><h3>${esc(s.n)}</h3><div class="muted">${esc(cat.n)} · ${l}/${m} puntos</div></div></div>
+    ${s.d ? `<p class="flav">${esc(s.d)}</p>` : ""}
+    <div class="btns"><button class="btn" id="d-add" ${canAdd(j) ? "" : "disabled"}>+ Añadir punto</button><button class="btn ghost" id="d-rem" ${l > 0 && !isAuto(n) ? "" : "disabled"}>− Quitar punto</button></div>
+    ${reqs.length ? `<div class="req">${reqs.join("")}</div>` : ""}
+    ${sp.html}
+    <div class="lvls">${levels}</div>`;
+  for (const b of el.querySelectorAll("[data-slv]")) b.onclick = () => { S.spellLv = {...S.spellLv, [j]: +b.dataset.slv}; S.sel = j; renderDetail(j); };
+  $("#d-add").onclick = () => { S.sel = j; add(j); };
+  $("#d-rem").onclick = () => { S.sel = j; remove(j); };
+}
+function renderSummary() {
+  const t = S.tree, agg = new Map(), units = new Map(), uix = new Map(), abil = [];
+  const addUnits = (ei, label) => {
+    const e = D.effects[ei]; if (!e || !(e.us || e.ur)) return;
+    const us = unitsFor(ei, t.ri); for (const u of us) { if (!units.has(u)) units.set(u, new Set()); units.get(u).add(label); if (!uix.has(u)) uix.set(u, us.ix.get(u)); }
+  };
+  for (const [label, effs] of fixedSources()) for (const [ei] of effs) addUnits(ei, label);
+  t.vis.forEach((n, j) => {
+    const l = S.lv[j] || 0; if (!l) return;
+    const s = SK(n.s);
+    for (const [ei, si, v] of s.lv[l - 1].e) {
+      if (!D.effects[ei]) continue;
+      const k = ei + ":" + si; agg.set(k, [ei, si, (agg.get(k)?.[2] || 0) + v]);
+      const e = D.effects[ei];
+      addUnits(ei, s.n);
+      for (const ai of e.ab || []) if (!abil.includes(ai)) abil.push(ai);
+    }
+  });
+  const fx = [...agg.values()].map(x => fxLi(...x)).join("");
+  const ul = [...units.entries()].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]));
+  $("#summary").innerHTML = `
+    <div><h3>Efectos de la build</h3>${fx ? `<ul class="fx">${fx}</ul>` : `<p class="empty">Aún no hay puntos invertidos.</p>`}</div>
+    <div><h3>Unidades potenciadas</h3>${ul.length ? `<div class="ulist">${ul.map(([u, ss]) => `<span class="uchip" title="${esc([...ss].join(", "))}">${window.unitThumb ? window.unitThumb(uix.get(u)) : ""}${esc(u)} <small>×${ss.size}</small></span>`).join("")}</div><p class="muted" style="font-size:12px">×N = número de habilidades y efectos que la mejoran (pasa el ratón para verlos).</p>` : `<p class="empty">Ni las habilidades elegidas ni los efectos del señor o de la facción mejoran unidades concretas.</p>`}</div>
+    ${abil.length ? `<div><h3>Habilidades activas y pasivas</h3>${abil.map(abilityHtml).join("")}</div>` : ""}`;
+}
+
+// ---------- buscador global (cabecera) ----------
+// Personajes, unidades, facciones y habilidades en el idioma cargado; cada resultado abre su pantalla.
+const fold = x => (x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+let GIX = null;
+function searchIndex() {
+  if (GIX) return GIX;
+  const out = [], home = {}, facOf = k => home[k];
+  D.factions.forEach((f, fi) => {
+    out.push({k: "Facción", n: f.n, s: f.race, go: () => openFaction(fi), ic: () => facCrest(f)});
+    for (const k of f.ll) if (home[k] === undefined) home[k] = fi;
+  });
+  D.factions.forEach((f, fi) => { for (const k of [...f.lords, ...f.heroes]) if (home[k] === undefined) home[k] = fi; });
+  const keys = Object.keys(home).sort((a, b) => (D.agents[b].leg ? 1 : 0) - (D.agents[a].leg ? 1 : 0));
+  // un resultado por cada facción que puede reclutar al personaje (Marc): primero la suya, luego el resto por orden de facción
+  for (const k of keys) { const a = D.agents[k];
+    const fis = [home[k], ...D.factions.map((f, fi) => fi).filter(fi => fi !== home[k] && (D.factions[fi].lords.includes(k) || D.factions[fi].heroes.includes(k)))];
+    for (const fi of fis) out.push({k: "Personaje", n: a.n, s: `${a.rol || AGENT_ES[a.t] || a.t} · ${D.factions[fi].n}`, go: () => openTree(fi, k, null, null), ic: () => RETRATOS.a[k] !== undefined ? agentCrest(k) : facCrest(D.factions[fi])}); }
+  // unidades: también una por facción que la recluta (sin repetir el mismo nombre dentro de una facción)
+  for (const [fk, list] of Object.entries(EJ.f)) { const fi = facIdx[fk]; if (fi === undefined) continue; const seenU = new Set();
+    for (const [i] of list) { const u = EJ.u[i]; if (!u || seenU.has(u.n)) continue; seenU.add(u.n);
+      out.push({k: "Unidad", n: u.n, s: D.factions[fi].n, go: () => openUnit(fi, u.k), ic: () => unitImgSrc(u.k) ? `<img src="${unitImgSrc(u.k)}" alt="">` : facCrest(D.factions[fi])}); } }
+  const seenS = new Set();
+  for (const k of keys) { const a = D.agents[k], T = D.trees[a.tree]; if (!T) continue;
+    for (const node of T[0]) { const sk = D.skills[node[0]]; if (!node[4] || !sk || !sk.n || /\[hidden\]/i.test(sk.n) || seenS.has(sk.n)) continue; seenS.add(sk.n);
+      out.push({k: "Habilidad", n: sk.n, s: `${a.n} · ${D.factions[home[k]].n}`, go: () => openSkill(home[k], k, node[0]), ic: () => SKI.a[sk.i] !== undefined ? `<img src="${SKI.img[SKI.a[sk.i]]}" alt="">` : ""}); } }
+  for (const x of out) x.f = fold(x.n);
+  return (GIX = out);
+}
+function openUnit(fi, key) {
+  Promise.resolve(openFaction(fi)).then(() => { setTab("units"); const b = document.querySelector(`#chars [data-uk="${key}"]`);
+    if (b) { b.click(); const c = document.querySelector(`#chars [data-uk="${key}"]`) || b; c.scrollIntoView({block: "center"}); c.classList.add("flash"); } });
+}
+function openSkill(fi, agent, si) {
+  Promise.resolve(openTree(fi, agent, null, null)).then(() => { const j = S.tree.vis.findIndex(n => n.s === si); if (j < 0) return;
+    S.sel = j; renderTree(); renderDetail(); const b = document.querySelector(`#rows [data-j="${j}"]`);
+    if (b) { b.scrollIntoView({block: "center", inline: "center"}); b.classList.add("flash"); } });
+}
+(() => {
+  const q = $("#gq"), box = $("#gres"); let hits = [], cur = 0, timer = 0;
+  const close = () => { box.hidden = true; q.setAttribute("aria-expanded", "false"); };
+  const paint = () => { box.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-selected", i === cur)); const b = box.children[cur]; if (b && b.scrollIntoView) b.scrollIntoView({block: "nearest"}); };
+  const run = () => {
+    const t = fold(q.value.trim()); if (t.length < 2) { close(); return; }
+    const words = t.split(/\s+/), rank = x => x.f.startsWith(t) ? 0 : (" " + x.f).includes(" " + t) ? 1 : x.f.includes(t) ? 2 : 3;
+    hits = searchIndex().filter(x => words.every(w => x.f.includes(w))).sort((a, b) => rank(a) - rank(b) || a.n.length - b.n.length).slice(0, 80);
+    cur = 0;
+    box.innerHTML = hits.length ? hits.map((x, i) => `<button role="option" data-g="${i}" tabindex="-1"><span class="gi">${x.ic ? x.ic() : ""}</span><span class="gt"><span class="gn">${esc(x.n)}</span><span class="gs">${esc(x.s)}</span></span><span class="gk">${window.WH3T ? window.WH3T(x.k) : x.k}</span></button>`).join("")
+      : `<div class="gnone">${window.WH3T ? window.WH3T("Sin resultados.") : "Sin resultados."}</div>`;
+    box.hidden = false; q.setAttribute("aria-expanded", "true"); paint();
+  };
+  const pick = i => { const x = hits[i]; if (!x) return; close(); q.value = ""; q.blur(); x.go(); };
+  q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 90); });
+  q.addEventListener("focus", () => { if (q.value.trim().length >= 2) run(); });
+  q.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (!hits.length) return; cur = (cur + (e.key === "ArrowDown" ? 1 : hits.length - 1)) % hits.length; paint(); }
+    else if (e.key === "Enter") { e.preventDefault(); pick(cur); }
+    else if (e.key === "Escape") { close(); q.blur(); }
+  });
+  box.addEventListener("mousedown", e => { const b = e.target.closest("[data-g]"); if (b) { e.preventDefault(); pick(+b.dataset.g); } });
+  q.addEventListener("blur", () => setTimeout(close, 120));
+  document.addEventListener("keydown", e => { if (e.key === "/" && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); } });
+})();
+
+renderFactions();
+// Las imágenes de cada subcultura (img/<subcultura>.js) se piden al abrir una de sus facciones; mientras llegan se ve
+// la pantalla de carga.
+const splash = on => $("#splash").classList.toggle("done", !on);
+for (const name of ["openFaction", "openTree", "openArmy"]) {
+  const open = window[name];
+  window[name] = (fi, ...rest) => {
+    const sc = D.factions[fi] && D.factions[fi].sc;
+    if (WH3HAS(sc)) return Promise.resolve(open(fi, ...rest));
+    splash(true);
+    return WH3NEED(sc).then(() => { splash(false); thumbByName = null; return open(fi, ...rest); });  // thumbByName: caché de ejercito.js
+  };
+}
+const startHash = decodeURIComponent((location.hash || "").slice(1));
+const startFac = D.factions.find(f => startHash.includes("." + f.k + "."));
+WH3NEED(startFac && startFac.sc).then(() => {
+  if (!fromToken(startHash) && !armyFromToken(startHash)) show("v-fac");
+  splash(false);
+});
+</script>
+<script>addEventListener("load", () => { const s = document.getElementById("splash"); if (s) s.classList.add("done"); });</script>
