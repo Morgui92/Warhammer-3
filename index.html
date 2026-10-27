@@ -2,7 +2,7 @@
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <!-- cabecera de documento para abrir index.html desde el disco (sin ella: modo quirks y sin escala en móvil); al publicar el artefacto pone la suya -->
 <style>[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Simulador WH3</title>
+<title>Composiciones y Lords WH3</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap">
@@ -423,7 +423,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.6.3";
+const SIM_VERSION = "2.6.4";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -513,17 +513,13 @@ function unitsFor(ei, race) {
   for (const ui of e.ur || []) take(ui);
   // solo tropas: los efectos de "este señor" no deben listar a todos los personajes de la raza
   let out = broad ? [] : [...names].filter(n => !chars.has(n)).sort();
-  // listas explícitas que en la práctica son una categoría amplia ("unidades de No Muertos", "todos los Demonios"):
-  // si cubren la mitad o más de las tropas de la raza, o más de 60 unidades entre todas las razas, tampoco se listan
-  // Si el texto del efecto nombra las unidades («a las unidades de Portadores de Plaga, Nurgletes…»), se muestran siempre
-  // que no pasen de 60; si solo da una categoría («unidades a distancia», «infantería y caballería», «No Muertos») y la lista
-  // pasa de 9 unidades, cubre media raza o un grupo entero, no se listan: basta el texto.
+  // listas explícitas que en la práctica son todo el ejército ("unidades de No Muertos", "todos los Demonios"): si cubren
+  // la mitad o más de las tropas de la raza y el texto no nombra las unidades, no se listan. Las listas de un tipo de tropa
+  // («infantería de rango 7 y superior», «voladoras, caballería y carros») sí se listan aunque sean largas (Marc, v2.6.4).
   const named = out.length && namesInText(e.t, out);
-  if (out.length && race >= 0 && (unitsFor(ei, -1).length > 60 || !named && (out.length >= 10 || out.length >= raceTroops(race) / 2 || wholeGroup(out, race)))) out = [];
+  if (out.length && race >= 0 && !named && out.length >= raceTroops(race) / 2) out = [];
   out.ix = ix; unitCache.set(k, out); return out;
 }
-// ¿La lista es en realidad «todas las unidades a distancia / de caballería / …» de la raza? Si cubre casi entera (80%)
-// alguna clase de tropa (casta, categoría o clase de unidad, mín. 5) y esas clases suman la mayor parte de la lista, sí.
 function namesInText(t, out) {
   // ¿el texto nombra las unidades? Se compara por raíz de cada palabra (sin tildes, 6 letras) para aceptar plurales y
   // grupos («Dragones» nombra a «Dragón Estelar», «Eslizones» a «Hostigadores Eslizones»). Cuenta como nombrada si la
@@ -533,22 +529,6 @@ function namesInText(t, out) {
   let hit = 0;
   for (const n of out) if (norm(n).replace(/[()]/g, " ").split(/[\s,–-]+/).some(w => w.length > 3 && txt.includes(w.slice(0, 6)))) hit++;
   return hit >= 0.6 * out.length;
-}
-const groupCache = new Map();
-function wholeGroup(out, race) {
-  if (out.length < 10) return false;  // listas cortas de unidades con nombre: se muestran
-  if (!groupCache.has(race)) {
-    const g = new Map();
-    for (const u of D.units) if (u[1].includes(race) && u[2] !== "lord" && u[2] !== "hero")
-      for (const k of ["c" + u[2], "t" + u[3], "l" + u[4]]) { if (!g.has(k)) g.set(k, new Set()); g.get(k).add(u[0]); }
-    groupCache.set(race, [...g.values()].filter(x => x.size >= 5));
-  }
-  const inOut = new Set(out), covered = new Set();
-  for (const g of groupCache.get(race)) {
-    const hit = [...g].filter(n => inOut.has(n));
-    if (hit.length >= 0.8 * g.size) hit.forEach(n => covered.add(n));
-  }
-  return covered.size >= 0.6 * out.length;
 }
 const troopCache = new Map();
 function raceTroops(race) {
