@@ -137,23 +137,46 @@ function syncHash() { try { history.replaceState(null, "", "#" + armyToken()); }
 function armyMsg(t) { const m = $("#a-msg"); if (m) m.textContent = t; }
 
 // ---------- guardados ----------
-function loadArmies() { try { return JSON.parse(localStorage.getItem(LS_ARMY) || "[]"); } catch (e) { return []; } }
+// cada ejército guardado lleva un id; A.saveId es el que está abierto, y «Guardar» lo sobrescribe
+const newSaveId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function loadArmies() {
+  let l; try { l = JSON.parse(localStorage.getItem(LS_ARMY) || "[]"); } catch (e) { l = []; }
+  if (!Array.isArray(l)) l = [];
+  if (l.some(b => !b.id)) { l.forEach(b => { if (!b.id) b.id = newSaveId(); }); storeArmies(l); }  // guardados de antes, sin id
+  return l;
+}
 function storeArmies(l) { try { localStorage.setItem(LS_ARMY, JSON.stringify(l)); } catch (e) {} }
-function saveArmy() {
-  const t = armyToken(), f = D.factions[A.fac];
+function saveArmy(asNew) {
+  const t = armyToken(), f = D.factions[A.fac], l = loadArmies();
   const name = (A.name || "").trim() || `${A.lord ? D.agents[A.lord].n : "Sin señor"} · ${used()} unidades`;
-  storeArmies([{name, fac: f.n, t, when: new Date().toISOString().slice(0, 10)}, ...loadArmies().filter(x => x.t !== t)].slice(0, 60));
-  renderSavedArmies(); armyMsg("Ejército guardado en este navegador.");
+  const b = {name, fac: f.n, t, when: new Date().toISOString().slice(0, 10)};
+  const cur = l.find(x => x.id === A.saveId);
+  if (asNew && cur && name === cur.name) { A.name = `${name} (copia)`; return saveArmy(true); }  // la copia no se llama igual que el original
+  const i = asNew ? -1 : l.indexOf(cur);
+  if (i >= 0) { l[i] = {...l[i], ...b}; storeArmies(l); armyMsg("Ejército actualizado en este navegador."); }
+  else if (asNew) { A.saveId = newSaveId(); storeArmies([{id: A.saveId, ...b}, ...l].slice(0, 60)); const inp = $("#a-name"); if (inp) inp.value = name; armyMsg("Copia guardada como ejército nuevo."); }
+  else { A.saveId = newSaveId(); storeArmies([{id: A.saveId, ...b}, ...l].slice(0, 60)); armyMsg("Ejército guardado en este navegador."); }
+  renderSaveButtons(); renderSavedArmies();
+}
+function openSaved(i) {
+  const b = loadArmies()[i]; if (!b || !armyFromToken(b.t)) return;
+  A.saveId = b.id; A.name = b.name; const inp = $("#a-name"); if (inp) inp.value = b.name;
+  renderSaveButtons(); renderSavedArmies();
+}
+function renderSaveButtons() {
+  const cur = loadArmies().find(x => x.id === A.saveId), s = $("#a-save");
+  if (s) { s.textContent = cur ? "Guardar cambios" : "Guardar"; s.title = cur ? `Sobrescribe «${cur.name}»` : "Lo añade a «Mis ejércitos»"; }
+  const n = $("#a-saveas"); if (n) { n.hidden = !cur; n.title = "Guarda una copia como ejército nuevo; el original no cambia"; }
 }
 function renderSavedArmies() {
   const l = loadArmies(), el = $("#a-saved"); if (!el) return;
-  el.innerHTML = l.length ? l.map((b, i) => `<div><button class="l" data-at="${esc(b.t)}" title="${esc(b.name)}">${esc(b.name)}</button><span class="muted">${esc(b.fac)} · ${esc(b.when)}</span><button class="x" data-adel="${i}" aria-label="Borrar">✕</button></div>`).join("")
+  el.innerHTML = l.length ? l.map((b, i) => `<div${b.id === A.saveId ? ` class="on"` : ""}><button class="l" data-aopen="${i}" title="${esc(b.name)}">${esc(b.name)}</button><span class="muted">${esc(b.fac)} · ${esc(b.when)}</span><button class="x" data-adel="${i}" aria-label="Borrar">✕</button></div>`).join("")
     : `<span class="empty">Aún no has guardado ningún ejército.</span>`;
 }
 
 // ---------- abrir ----------
 function openArmy(fi) {
-  if (A.fac !== fi) { A.fac = fi; A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.caste = ""; A.q = ""; }
+  if (A.fac !== fi) { A.fac = fi; A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.caste = ""; A.q = ""; A.saveId = null; }
   renderArmyAll(); show("v-army");
 }
 window.openArmy = openArmy; window.armyFromToken = armyFromToken;
@@ -174,7 +197,7 @@ function renderArmyAll() {
         <div class="frame abox">
           <div class="atop"><input id="a-name" placeholder="Nombre del ejército" value="${esc(A.name)}" aria-label="Nombre del ejército"><div id="a-totals" class="atotals"></div></div>
           <div id="a-slots" class="slots"></div>
-          <div class="btns"><button class="btn" id="a-copy">Copiar enlace</button><button class="btn ghost" id="a-save">Guardar</button><button class="btn ghost" id="a-clear">Vaciar</button></div>
+          <div class="btns"><button class="btn" id="a-copy">Copiar enlace</button><button class="btn ghost" id="a-save">Guardar</button><button class="btn ghost" id="a-saveas" hidden>Guardar como…</button><button class="btn ghost" id="a-new">Nuevo ejército</button><button class="btn ghost" id="a-clear">Vaciar</button></div>
           <div id="a-msg" class="copied" aria-live="polite"></div>
           <input class="linkbox" id="a-link" readonly aria-label="Enlace del ejército" hidden>
           <div><div class="lbl">Mis ejércitos (este navegador)</div><div class="saved" id="a-saved"></div></div>
@@ -193,9 +216,12 @@ function renderArmyAll() {
     const link = armyLink(), box = $("#a-link"); box.hidden = false; box.value = link;
     try { await navigator.clipboard.writeText(link); armyMsg("Enlace copiado. Ábrelo para cargar este ejército."); } catch (e) { box.select(); armyMsg("Copia el enlace seleccionado."); }
   };
-  $("#a-save").onclick = saveArmy;
+  $("#a-save").onclick = () => saveArmy();
+  $("#a-saveas").onclick = () => saveArmy(true);
+  // «Nuevo ejército» empieza uno en blanco que se guardará aparte; «Vaciar» solo quita las unidades del que estás editando
+  $("#a-new").onclick = () => { A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.saveId = null; $("#a-name").value = ""; armyChanged(); renderSaveButtons(); renderSavedArmies(); armyMsg("Ejército nuevo: al guardarlo se añadirá a «Mis ejércitos»."); };
   $("#a-clear").onclick = () => { A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; armyChanged(); };
-  renderRoster(); renderArmy(); renderSavedArmies();
+  renderRoster(); renderArmy(); renderSaveButtons(); renderSavedArmies();
 }
 function armyChanged() { renderArmy(); renderRoster(); syncHash(); }
 function renderArmy() { renderSlots(); renderTotals(); renderField(); renderStats(); }
@@ -496,8 +522,8 @@ document.addEventListener("click", e => {
   if ((b = g("[data-al]"))) { A.lord = b.dataset.al; A.sel = {id: "L", t: "h", k: A.lord}; armyChanged(); return; }
   if ((b = g("[data-rm]"))) { removeItem(b.dataset.rm); return; }
   if ((b = g("[data-tree]"))) { openTree(A.fac, b.dataset.tree, null, null); return; }
-  if ((b = g("[data-at]"))) { armyFromToken(b.dataset.at); return; }
-  if ((b = g("[data-adel]"))) { const l = loadArmies(); l.splice(+b.dataset.adel, 1); storeArmies(l); renderSavedArmies(); return; }
+  if ((b = g("[data-aopen]"))) { openSaved(+b.dataset.aopen); return; }
+  if ((b = g("[data-adel]"))) { const l = loadArmies(), [d] = l.splice(+b.dataset.adel, 1); storeArmies(l); if (d && d.id === A.saveId) A.saveId = null; renderSaveButtons(); renderSavedArmies(); return; }
   if ((b = g("[data-sid]"))) { const id = b.dataset.sid; A.sel = armyEntries().find(x => x.id === id) || null; renderSlots(); renderStats(); return; }
   if ((b = g("[data-su]")) || (b = g("[data-sa]"))) {
     const add = b.dataset.su ? {t: "u", k: b.dataset.su} : {t: A.tab === "lords" ? "L" : "h", k: b.dataset.sa};
@@ -514,6 +540,7 @@ document.addEventListener("click", e => {
 // ---------- estilos ----------
 document.head.insertAdjacentHTML("beforeend", `<style>
 #a-slots .slot.over{outline:2px dashed var(--gold2);outline-offset:-2px}
+.saved div.on button.l{color:var(--gold2);font-weight:600}
 .army{display:grid;grid-template-columns:330px minmax(0,1fr) 300px;gap:14px;align-items:start}
 .roster,.ustats{padding:12px;position:sticky;top:70px;max-height:calc(100vh - 90px);overflow:auto;display:grid;gap:8px;align-content:start}
 .roster .tabs{margin:0}
