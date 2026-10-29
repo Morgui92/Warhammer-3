@@ -10,6 +10,9 @@
 (function () {
   const KS = "wh3-skill-builds", KA = "wh3-army-builds", KD = "wh3-sync-del", KG = "wh3-sync-github";
   const FILE = "wh3-simulador-sync.json", API = "https://api.github.com";
+  // el artefacto no puede conectar con GitHub: entre los dos se pasan los guardados con un enlace (#sync=…)
+  const WEB = "https://morgui92.github.io/Warhammer-3/", ARTI = "https://claude.ai/artifact/FjNXHMKQF3wmkcwZYGygRd";
+  const ON_WEB = /github\.io$/.test(location.hostname);
   const MAXS = 80, MAXA = 60, DEL_DAYS = 180;
   const EN = window.WH3LANG === "en";
   const T = (es, en) => EN ? en : es;
@@ -97,7 +100,8 @@
       try { return JSON.parse(txt || "{}"); } catch (e) { return null; }
     },
     push: async m => { const id = await ghGist(); await ghFetch("/gists/" + id, {method: "PATCH", body: JSON.stringify({files: {[FILE]: {content: JSON.stringify({...m, at: Date.now()})}}})}); }};
-  function setupGithub() { if (gh() && gh().token && !backends.includes(ghBackend)) backends.push(ghBackend); }
+  const IN_ARTI = !ON_WEB && !!window.claude;  // dentro de claude.ai GitHub está bloqueado («Failed to fetch»)
+  function setupGithub() { if (!IN_ARTI && gh() && gh().token && !backends.includes(ghBackend)) backends.push(ghBackend); }
 
   // ---------- sincronizar ----------
   let chain = Promise.resolve(), busy = 0;
@@ -131,7 +135,7 @@
   window.WH3SYNC = {
     changed() { later(); },
     removed(kind, key) { const d = rd(KD, {}); d[(kind === "army" ? "a:" : "s:") + key] = Date.now(); wr(KD, d); later(); },
-    now: sync, merge,
+    now: sync, merge, pack: m => pack(m),
   };
 
   // ---------- botón y panel ----------
@@ -158,13 +162,19 @@
       <p class="muted">${T(`En este navegador: ${l.skill.length} builds y ${l.army.length} ejércitos.`, `In this browser: ${l.skill.length} builds and ${l.army.length} armies.`)}</p>
       ${backends.map(line).join("") || `<p>${T("Ahora mismo lo guardado solo está en este navegador.", "Right now your saves live only in this browser.")}</p>`}
       <div class="sy-gh">
+        <h4>${ON_WEB ? T("Pasar al artefacto de Claude", "Send to the Claude artifact") : T("Pasar a la web", "Send to the website")}</h4>
+        <p class="muted">${ON_WEB ? T("Abre el artefacto con tus builds y ejércitos de aquí ya mezclados con los suyos.", "Opens the artifact with your builds and armies from here merged into its own.")
+          : T("El artefacto no puede conectar con GitHub. Este botón abre la web con tus builds y ejércitos de aquí, y la web los mezcla y los sube a tu GitHub.", "The artifact cannot reach GitHub. This button opens the website with your builds and armies from here; it merges them and uploads them to your GitHub.")}</p>
+        <div class="sy-btns"><button data-sy="send">${ON_WEB ? T("Enviar al artefacto ↗", "Send to the artifact ↗") : T("Enviar a la web ↗", "Send to the website ↗")}</button></div>
+      </div>
+      ${IN_ARTI ? "" : `<div class="sy-gh">
         <h4>${T("Con GitHub (también la web y el móvil)", "With GitHub (website and phone too)")}</h4>
         ${g && g.token ? `<p>${T("Conectado. Usa el mismo token en el móvil y en el PC y se mezclarán solos.", "Connected. Use the same token on your phone and PC and they merge on their own.")}</p>
           <div class="sy-btns"><button data-sy="now">${T("Sincronizar ahora", "Sync now")}</button><button data-sy="off">${T("Desconectar este navegador", "Disconnect this browser")}</button></div>`
         : `<p class="muted">${T(`Para tener las mismas builds en la web y en todos tus dispositivos: <a href="${tokUrl}" target="_blank" rel="noopener">crea un token de GitHub</a> (solo con permiso «gist», caducidad la que quieras), cópialo y pégalo aquí en cada dispositivo. Se guarda en un gist privado de tu cuenta.`,
             `To have the same builds on the website and all your devices: <a href="${tokUrl}" target="_blank" rel="noopener">create a GitHub token</a> (only the “gist” scope), copy it and paste it here on each device. It is stored in a private gist on your account.`)}</p>
           <div class="sy-btns"><input id="sy-tok" type="password" autocomplete="off" placeholder="ghp_…" aria-label="Token"><button data-sy="on">${T("Conectar", "Connect")}</button></div>`}
-      </div>`;
+      </div>`}`;
   }
   document.addEventListener("DOMContentLoaded", () => {
     const host = document.querySelector("header.top .wrap"); if (!host) return;
@@ -178,6 +188,10 @@
       if (!panel.hidden && !panel.contains(e.target) && !btn.contains(e.target)) panel.hidden = true;
       const b = e.target.closest("[data-sy]"); if (!b) return;
       if (b.dataset.sy === "now") sync();
+      if (b.dataset.sy === "send") {
+        const url = (ON_WEB ? ARTI : WEB) + "#sync=" + await pack(readLocal());
+        const w = window.open(url, "_blank", "noopener"); if (!w) location.href = url;
+      }
       if (b.dataset.sy === "off") { try { localStorage.removeItem(KG); } catch (x) {} backends.splice(backends.indexOf(ghBackend), 1); delete state.github; paint(); fillPanel(); }
       if (b.dataset.sy === "on") {
         const v = (document.getElementById("sy-tok").value || "").trim(); if (!v) return;
@@ -196,6 +210,7 @@
 .sypanel p{margin:6px 0}.sypanel a{color:var(--gold2,#e8cf8f)}
 .sy-row{display:flex;gap:8px;align-items:center;margin:4px 0;flex-wrap:wrap}
 .sy-dot{width:8px;height:8px;border-radius:50%;background:#6b6255}.sy-dot[data-ok="true"]{background:var(--good,#8fd16a)}.sy-dot[data-ok="false"]{background:var(--bad,#e2665a)}
+.sy-ok{color:var(--good,#8fd16a);margin:0 0 6px}
 .sy-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .sy-btns input{flex:1;min-width:0;background:#0e0c0a;border:1px solid var(--line,#5a4a36);color:var(--text,#e6dccb);padding:6px 8px;font:inherit}
 .sy-btns button{background:#2a2116;border:1px solid var(--line,#5a4a36);color:var(--gold2,#e8cf8f);padding:6px 10px;cursor:pointer;font:inherit}
@@ -204,6 +219,30 @@
   // al volver a la pestaña y cada minuto mientras está visible (GitHub no avisa de cambios)
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sync(); });
   setInterval(() => { if (document.visibilityState === "visible" && backends.includes(ghBackend)) sync(); }, 60000);
+
+  // ---------- enlace #sync=… (JSON comprimido con deflate-raw, base64url) ----------
+  async function pack(m) {
+    const bytes = new TextEncoder().encode(JSON.stringify(m));
+    let out = bytes;
+    if (window.CompressionStream) out = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
+    let bin = ""; for (let i = 0; i < out.length; i += 8192) bin += String.fromCharCode.apply(null, out.subarray(i, i + 8192));
+    return (window.CompressionStream ? "z" : "j") + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  async function unpack(s) {
+    const bin = atob(s.slice(1).replace(/-/g, "+").replace(/_/g, "/")), bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+    const raw = s[0] === "z" ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer() : bytes;
+    return JSON.parse(new TextDecoder().decode(raw));
+  }
+  const incoming = /^#sync=([A-Za-z0-9_-]+)$/.exec(location.hash || "");
+  if (incoming) {
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}  // que no lo lea el enrutado de builds
+    unpack(incoming[1]).then(r => {
+      const l = readLocal(), m = merge(l, r), n = (r.skill || []).length + (r.army || []).length;
+      writeLocal(m); refresh(); sync();
+      const tell = () => { if (btn) { panel.hidden = false; fillPanel(); panel.insertAdjacentHTML("afterbegin", `<p class="sy-ok">${T(`Recibidos ${n} guardados y mezclados con los de aquí.`, `Received ${n} saved items and merged them with these.`)}</p>`); } };
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => setTimeout(tell, 300)); else setTimeout(tell, 300);
+    }).catch(() => {});
+  }
 
   readLocal();
   setupGithub(); if (backends.length) sync();
