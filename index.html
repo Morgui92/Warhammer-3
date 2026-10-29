@@ -76,7 +76,7 @@ ul.fx li::before{content:"◆";position:absolute;left:0;top:1px;font-size:9px;co
 /* ---- árbol ---- */
 .sim{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px;align-items:start}
 .simmain{display:grid;gap:14px;min-width:0}
-.sheet{padding:14px;display:grid;gap:12px;position:sticky;top:70px}
+.sheet{padding:14px;display:grid;gap:12px;position:sticky;top:70px;max-height:calc(100vh - 84px);overflow-y:auto;scrollbar-width:thin}
 .portrait{display:flex;gap:12px;align-items:center}
 .card.info{cursor:default;opacity:.8}.card.info:hover{transform:none}
 .evo{display:grid;gap:6px}.evob{display:flex;gap:8px;align-items:center;text-align:left;background:#0d0b0966;border:1px solid var(--line);border-radius:3px;padding:4px 6px;color:inherit;font:inherit;cursor:pointer}
@@ -94,6 +94,20 @@ ul.fx li::before{content:"◆";position:absolute;left:0;top:1px;font-size:9px;co
 .lvbar span{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));transition:width .15s}
 .rankrow output{font:22px var(--display);color:var(--gold2);min-width:2ch;text-align:right;font-variant-numeric:tabular-nums}
 .pts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.lstats{display:grid;gap:6px}
+.lsg{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.lsr{background:#0d0b0999;border:1px solid var(--line);border-radius:2px;padding:3px 6px;font-size:11px;color:var(--muted);min-width:0}
+.lsr.ch{border-color:#4f6b3a}
+.lsr span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lsr span .sico{width:13px;height:13px;vertical-align:-2px;margin-right:3px}
+.lsr b{font-size:14px;color:var(--text);font-weight:500;font-variant-numeric:tabular-nums}
+.lsr b.up,.lsr small.up,.lsf.up{color:var(--good)} .lsr b.down,.lsr small.down{color:var(--bad)}
+.lsr small{font-size:11px;margin-left:4px;font-variant-numeric:tabular-nums}
+.lsr .brk{display:block;margin:0;color:var(--muted);font-weight:400}
+.lsm{font-size:12px;color:var(--muted)} .lsm b{color:var(--gold2)}
+.lsfs{display:flex;flex-wrap:wrap;gap:4px}.lsf{font-size:11px;border:1px solid var(--line);border-radius:2px;padding:2px 6px;color:var(--muted)}
+.lsf .sico{width:13px;height:13px;vertical-align:-2px;margin-right:3px}
+.lsn{font-size:11px;margin:0}
 .pts div{background:#0d0b09;border:1px solid var(--line);padding:6px 8px;border-radius:2px}
 .pts b{display:block;font:22px var(--display);color:var(--gold2);font-variant-numeric:tabular-nums}
 .pts .over b{color:var(--bad)}
@@ -222,7 +236,7 @@ svg.glinks{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
 .empty{color:var(--muted);font-style:italic;font-size:14px}
 
 @media (max-width:1180px){.sim{grid-template-columns:230px minmax(0,1fr)}}
-@media (max-width:760px){.sim{grid-template-columns:minmax(0,1fr)}.sheet{position:static}.fhead{grid-template-columns:1fr}.brand{font-size:19px}.patch{font-size:10px;margin-left:0}}
+@media (max-width:760px){.sim{grid-template-columns:minmax(0,1fr)}.sheet{position:static;max-height:none;overflow:visible}.fhead{grid-template-columns:1fr}.brand{font-size:19px}.patch{font-size:10px;margin-left:0}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 /* ===== v2.4 · acabado premium: capa final de estilo (tipografía, relieve dorado, transiciones, foco, móvil) ===== */
 :root{--gold3:#f6e2a8;--ink:#0b0907;--glow:0 0 0 1px #c9a45c55,0 6px 18px -6px #000,0 0 14px -2px #c9a45c55;--ease:cubic-bezier(.2,.7,.2,1)}
@@ -405,6 +419,7 @@ ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
 <script src="escudos.js"></script>
 <script src="carga.js"></script><!-- retratos, cartas e iconos: se cargan por subcultura desde img/ -->
 <script src="iconos.js"></script>
+<script src="monturas.js"></script><!-- monturas de las habilidades y sus estadísticas (hoja del personaje) -->
 <script src="ejercito.js"></script>
 <script src="ui_juego.js"></script><!-- texturas de la pantalla de habilidades del juego -->
 <script src="img/iconos_efectos.js"></script><!-- iconos de las líneas de efecto -->
@@ -423,7 +438,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.6.5";
+const SIM_VERSION = "2.7";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -855,6 +870,7 @@ function renderSheet() {
       <div class="lvbar" aria-hidden="true"><span id="lvfill"></span></div>
       <span class="muted" style="font-size:12px">Sube con cada punto que repartes</span></div>
     <div class="pts" id="pts"></div>
+    <div class="lstats" id="lstats"></div>
     <div class="btns"><button class="btn" id="copy">Copiar enlace</button><button class="btn ghost" id="reset">Reiniciar</button><button class="btn ghost" id="save">Guardar</button><button class="btn jump" id="jump">Ir al árbol ↓</button></div>
     <div id="copymsg" class="copied" aria-live="polite"></div>
     <input class="linkbox" id="linkbox" readonly aria-label="Enlace de la build" hidden>
@@ -877,6 +893,82 @@ function renderSheetPoints() {
   const tot = pointsTotal(), sp = spent();
   $("#rankout").textContent = S.rank; $("#lvfill").style.width = (100 * (S.rank - 1) / Math.max(1, maxRank() - 1)) + "%";
   $("#pts").innerHTML = `<div class="${sp > tot ? "over" : ""}"><span class="lbl">Gastados</span><b>${sp} / ${tot}</b></div><div><span class="lbl">Restantes</span><b>${Math.max(0, tot - sp)}</b></div>`;
+  renderLiveStats();
+}
+
+// ---------- hoja del personaje en vivo ----------
+// Estadísticas base de su unidad (o de la montura elegida en el árbol) más los efectos que el juego aplica al propio
+// personaje: habilidades con puntos, rasgo del señor, innatas, rasgo de reclutamiento y efectos de facción sobre los
+// personajes. Qué estadística cambia cada efecto viene de su bonus_value_id (D.effects[i].sm, stats_personaje.py);
+// las mejoras al ejército, los objetos y la veteranía no se suman.
+const MNT = window.WH3MNT || {s: {}, u: {}};
+const SELF_SC = /^(character_to_character_own(_armytext|_factionwide|_unseen)?|faction_to_character_own(_unseen|_factionwide_armytext)?)$/;
+function selfScope(sc, a) {
+  return SELF_SC.test(sc) || (sc === "character_to_character_own_spellcaster_text" && a.caster) ||
+    (/^faction_to_character_own(_unseen)?_lords_only$/.test(sc) && a.t === "general") || (sc === "faction_to_character_own_agents" && a.t !== "general");
+}
+function liveStats() {
+  const t = S.tree, a = t.a, src = [];
+  for (const [label, effs] of fixedSources()) for (const [ei, si, v] of effs) src.push([ei, si, v, label]);
+  let mount = null;
+  t.vis.forEach((n, j) => {
+    const l = S.lv[j] || 0; if (!l) return;
+    const s = SK(n.s), mk = MNT.s[D.skill_keys[n.s]];
+    if (mk && MNT.u[mk]) mount = {k: mk, n: s.n};
+    for (const [ei, si, v] of s.lv[l - 1].e) src.push([ei, si, v, s.n]);
+  });
+  const base = mount ? MNT.u[mount.k] : (window.charStats ? charStats(S.agent) : null);
+  if (!base) return null;
+  const unit = mount ? mount.k : a.u, add = {}, pct = {}, on = {}, why = {};
+  for (const [ei, si, v, label] of src) {
+    const e = D.effects[ei]; if (!e || !e.sm || !v) continue;
+    if (!selfScope(D.scope_keys[si] || "", a)) continue;
+    for (const [st, mode, us] of e.sm) {
+      if (us >= 0 && !(D.smu[us] || []).includes(unit)) continue;
+      if (mode === "on") { if (v > 0) on[st] = 1; }
+      else (mode === "p" ? pct : add)[st] = ((mode === "p" ? pct : add)[st] || 0) + v;
+      (why[st] = why[st] || []).push(mode === "on" ? label : `${label} ${v > 0 ? "+" : ""}${fmtNum(v)}${mode === "p" ? "%" : ""}`);
+    }
+  }
+  const r = base.rng || null;
+  const calc = (st, b) => b == null ? null : st === "rl" ? +(b * (1 - (pct[st] || 0) / 100)).toFixed(1) : Math.round((b + (add[st] || 0)) * (1 + (pct[st] || 0) / 100));
+  const v = {};
+  for (const st of ["hp", "arm", "ld", "sp", "ma", "md", "ch", "wb", "wap", "bvl", "bvi", "sh"]) v[st] = [base[st] || 0, calc(st, base[st] || 0)];
+  v.ws = [base.wb + base.wap, v.wb[1] + v.wap[1]];
+  if (r) { v.rng = [r.r, calc("rng", r.r)]; v.rb = [r.b, calc("rb", r.b)]; v.rap = [r.ap, calc("rap", r.ap)]; v.am = [r.am, calc("am", r.am)]; if (r.rl) v.rl = [r.rl, calc("rl", r.rl)]; }
+  const res = {};
+  for (const k of ["salvaguarda", "fisico", "proyectiles", "magia", "fuego"]) {
+    const b0 = (base.res || {})[k] || 0, b1 = Math.min(90, b0 + (add[k] || 0));
+    if (b0 || b1) res[k] = [b0, b1];
+  }
+  return {v, res, why, mount, fly: base.fly, hpa: base.hpa, mag: [base.mag, base.mag || on.mag], fire: [base.fire, base.fire || on.fire],
+    rmag: r && [r.mag, r.mag || on.mag], rfire: r && [r.fire, r.fire || on.fire]};
+}
+const RES_LBL = {salvaguarda: "Salvaguarda", fisico: "Res. física", proyectiles: "Res. proyectiles", magia: "Res. mágica", fuego: "Res. fuego"};
+function renderLiveStats() {
+  const el = $("#lstats"); if (!el) return;
+  const L = liveStats();
+  if (!L) { el.innerHTML = `<div class="lbl">Hoja del personaje</div><p class="empty">Sin estadísticas en la base de datos.</p>`; return; }
+  const loc = n => n.toLocaleString(window.WH3LANG === "en" ? "en" : "es");
+  const row = (st, label, [b, x], unit = "", lowerBetter = false, extra = "") => {
+    const d = +(x - b).toFixed(1), cls = !d ? "" : (d > 0) !== lowerBetter ? "up" : "down";
+    const tipTxt = (L.why[st] || []).join("\n");
+    return `<div class="lsr${cls ? " ch" : ""}"${tipTxt ? ` title="${esc(tipTxt)}"` : ""}><span>${typeof ico === "function" ? ico(st) : ""}${label}</span><b class="${cls}">${st === "hp" && L.hpa ? "~" : ""}${loc(x)}${unit}${extra}</b>${d ? `<small class="${cls}">${d > 0 ? "+" : ""}${loc(d)}${unit}</small>` : ""}</div>`;
+  };
+  const V = L.v, flag = (k, lbl, [b, x]) => x ? `<span class="lsf${!b ? " up" : ""}">${typeof ico === "function" ? ico(k) : ""}${lbl}</span>` : "";
+  const flags = flag("mag", "Ataques mágicos", L.mag) + flag("fire", "Ataques de fuego", L.fire);
+  el.innerHTML = `<div class="lbl">Hoja del personaje</div>
+    ${L.mount ? `<div class="lsm">Montura: <b>${esc(L.mount.n)}</b></div>` : ""}
+    <div class="lsg">
+      ${row("hp", "Vida", V.hp)}${row("arm", "Armadura", V.arm)}${row("ld", "Liderazgo", V.ld)}${row("sp", L.fly ? "Vel. (vuelo)" : "Velocidad", V.sp)}
+      ${row("ma", "Ataque c/c", V.ma)}${row("md", "Defensa c/c", V.md)}${row("ch", "Carga", V.ch)}
+      ${row("ws", "Fuerza arma", V.ws, "", false, ` <small class="brk">${loc(V.wb[1])} + ${loc(V.wap[1])} AP</small>`)}
+      ${V.bvl[0] || V.bvl[1] ? row("bvl", "Bonus vs grandes", V.bvl) : ""}${V.bvi[0] || V.bvi[1] ? row("bvi", "Bonus vs inf.", V.bvi) : ""}${V.sh[0] || V.sh[1] ? row("sh", "Escudo", V.sh, "%") : ""}
+      ${V.rng ? row("rng", "Alcance", V.rng) + row("rb", "Daño proyectil", [V.rb[0] + V.rap[0], V.rb[1] + V.rap[1]], "", false, ` <small class="brk">${loc(V.rb[1])} + ${loc(V.rap[1])} AP</small>`) + row("am", "Munición", V.am) + (V.rl ? row("rl", "Tiempo de recarga", V.rl, " s", true) : "") : ""}
+      ${Object.entries(L.res).map(([k, x]) => row(k, RES_LBL[k], x, "%")).join("")}
+    </div>
+    ${flags ? `<div class="lsfs">${flags}</div>` : ""}
+    <p class="muted lsn">Tamaño Ultra. Suma lo que mejora al propio personaje (habilidades, rasgos y efectos); no cuenta objetos, veteranía ni mejoras al ejército. Pasa el ratón por una cifra para ver de dónde sale.</p>`;
 }
 async function copyLink() {
   const link = shareLink(), msg = $("#copymsg"), box = $("#linkbox");

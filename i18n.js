@@ -126,6 +126,9 @@
     "Nada coincide.": "Nothing matches.", "Esta facción no tiene señores reclutables.": "This faction has no recruitable lords.", "Esta facción no tiene héroes reclutables.": "This faction has no recruitable heroes.",
     "No cabe: el ejército ya tiene 20 huecos ocupados o esa unidad de renombre ya está.": "It does not fit: the army already has 20 slots filled, or that renowned unit is already in it.",
     "• (el juego no detalla más efectos para esta fase)": "• (the game gives no further effects for this phase)",
+    "Hoja del personaje": "Character sheet", "Res. física": "Physical res.", "Res. proyectiles": "Missile res.", "Res. mágica": "Magic res.",
+    "Res. fuego": "Fire res.", "Daño proyectil": "Missile damage", "Tiempo de recarga": "Reload time", "Montura:": "Mount:",
+    "Tamaño Ultra. Suma lo que mejora al propio personaje (habilidades, rasgos y efectos); no cuenta objetos, veteranía ni mejoras al ejército. Pasa el ratón por una cifra para ver de dónde sale.": "Ultra size. Adds what improves the character itself (skills, traits and effects); items, veterancy and army buffs are not counted. Hover a value to see where it comes from.",
     "Language": "Language", "Idioma": "Language",
   };
   const TG = {"uno mismo": "self", "aliados": "allies", "enemigos": "enemies", "suelo": "ground", "todos": "all"};
