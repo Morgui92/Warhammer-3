@@ -456,17 +456,17 @@ let BUFFED = new Map(), BUFFS = null, ROSTER_BUFFED = new Map();  // ROSTER_BUFF
 // los de su build si tiene. Sin build se usa el árbol vacío, que solo da los innatos.
 function armyBuffs() {
   const ri = raceIdx[D.factions[A.fac].sc];
-  const troops = [...new Set(A.items.filter(it => it.t === "u").map(it => it.k))];
+  const troops = [...new Set(A.items.filter(it => it.t === "u").map(it => it.k))], facKeys = facUnits(D.factions[A.fac].k).map(x => x.u.k);
   const all = new Map(), per = new Map(), sets = new Map();
   const add = (m, ei, si, v, src) => { const k = ei + ":" + si, x = m.get(k) || {ei, si, v: 0, src: []}; x.v += v; if (!x.src.includes(src)) x.src.push(src); m.set(k, x); };
   const take = (ei, si, v, src) => {
     const ef = D.effects[ei]; if (!ef || si < 0 || !ef.t || !ef.t.trim()) return;
     const sk = D.scope_keys[si]; if (!ARMY_SC.test(sk) || NOT_ARMY.test(sk)) return;
-    // si alcanza a todas las unidades del ejército se lista con los de todo el ejército (no hay nada que resaltar)
+    // si alcanza a todas las unidades que recluta la facción va con los de todo el ejército (no hay nada que resaltar);
+    // si no, resalta las del ejército a las que llega, aunque sean todas las que llevas (como en la lista de la izquierda)
     if (ef.us || ef.ur) add(sets, ei, si, v, src);
-    const hit = ef.us || ef.ur ? troops.filter(k => unitHit(ei, k, ri)) : null;
-    if (hit && hit.length < troops.length) for (const k of hit) { if (!per.has(k)) per.set(k, new Map()); add(per.get(k), ei, si, v, src); }
-    else if (!hit || hit.length) add(all, ei, si, v, src);
+    if (!(ef.us || ef.ur) || facKeys.every(k => unitHit(ei, k, ri))) { add(all, ei, si, v, src); return; }
+    for (const k of troops) if (unitHit(ei, k, ri)) { if (!per.has(k)) per.set(k, new Map()); add(per.get(k), ei, si, v, src); }
   };
   let fac = null;
   for (const e of armyEntries()) {
