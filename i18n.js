@@ -44,7 +44,7 @@
   const W = {
     "Nombre de la build (opcional)": "Build name (optional)", "Nombre de la build": "Build name", "Guardar y usar en el ejército ↩": "Save and use in the army ↩",
     "La guarda en «Mis builds» y se la asigna a este personaje en el ejército": "Saves it to «My builds» and assigns it to this character in the army",
-    "Builds de habilidades": "Skill builds", "Builds y mejoras": "Builds and buffs", "Facción, innatos y builds · ⓘ": "Faction, innate and builds · ⓘ",
+    "Builds de habilidades": "Skill builds", "Otros personajes": "Other characters", "¿Borrar?": "Delete?", "Borrar el ejército elegido": "Delete the chosen army", "Borrar la build elegida": "Delete the chosen build", "Builds y mejoras": "Builds and buffs", "Facción, innatos y builds · ⓘ": "Faction, innate and builds · ⓘ",
     "Se suman los efectos que el juego aplica al ejército: facción, efectos innatos del señor y de los héroes, y sus builds (guárdalas en el árbol o créalas con ✎). Los del propio personaje están en su hoja del árbol.":
       "Adds the effects the game applies to the army: faction, innate effects of the lord and heroes, and their builds (save them in the tree or create them with ✎). The character's own effects are on their tree sheet.",
     "Ningún efecto alcanza a todo el ejército.": "No effect reaches the whole army.", "Ninguna unidad del ejército recibe mejoras concretas.": "No unit in the army gets specific buffs.",
@@ -153,7 +153,7 @@
   const pl = (n, one, many) => +n === 1 ? one : many;
   // patrones con números o nombres dentro; se prueban en orden si la frase no está entera en W
   const R = [
-    [/^\((\d+) de (\d+)\)$/, "($1 of $2)"], [/^(.+) · Nivel (\d+) · (\d+) puntos$/, "$1 · Rank $2 · $3 points"], [/^Nivel (\d+) · (\d+) puntos$/, "Rank $1 · $2 points"],
+    [/^\((\d+) de (\d+)\)$/, "($1 of $2)"], [/^Abrir un ejército guardado \((\d+)\)…$/, "Open a saved army ($1)…"], [/^Abrir una build guardada \((\d+)\)…$/, "Open a saved build ($1)…"], [/^(.+) · Nivel (\d+) · (\d+) puntos$/, "$1 · Rank $2 · $3 points"], [/^Nivel (\d+) · (\d+) puntos$/, "Rank $1 · $2 points"],
     [/^La mejorarían (\d+) efectos? de la facción, el señor y los héroes$/, (m, n) => `${n} ${n === "1" ? "effect" : "effects"} from the faction, lord and heroes would buff it`],
     [/^Sin mejoras concretas: /, () => "No specific buffs: "], [/^Mejorada por (\d+) efectos? de las builds$/, (m, n) => `Buffed by ${n} build ${n === "1" ? "effect" : "effects"}`],
     [/^Build de (.+)$/, "$1's build"],
@@ -240,7 +240,7 @@
     return hit ? pre + out + post : s;
   }
   window.WH3T = tr;
-  const ATTRS = ["placeholder", "title", "aria-label", "data-tip"];
+  const ATTRS = ["placeholder", "title", "aria-label", "data-tip", "label"];
   // «Recarga» es la recarga de un hechizo, salvo en la ficha de una unidad (recarga del arma)
   const trText = c => c.nodeValue.trim() === "Recarga" && c.parentElement && c.parentElement.closest(".ustats") ? c.nodeValue.replace("Recarga", "Reload") : tr(c.nodeValue);
   function fix(root) {

@@ -192,7 +192,9 @@ function renderSaveButtons() {
 }
 function renderSavedArmies() {
   const l = loadArmies(), el = $("#a-saved"); if (!el) return;
-  el.innerHTML = l.length ? l.map((b, i) => `<div${b.id === A.saveId ? ` class="on"` : ""}><button class="l" data-aopen="${i}" title="${esc(b.name)}">${esc(b.name)}</button><span class="muted">${esc(b.fac)} · ${esc(b.when)}</span><button class="x" data-adel="${i}" aria-label="Borrar">✕</button></div>`).join("")
+  // desplegable (con 50 guardados una lista ocuparía demasiado); elegir uno lo abre, ✕ borra el elegido (dos toques)
+  const cur = l.findIndex(b => b.id === A.saveId);
+  el.innerHTML = l.length ? `<div class="ssel"><select id="a-savedsel" aria-label="Mis ejércitos"><option value="">${cur < 0 ? `Abrir un ejército guardado (${l.length})…` : "—"}</option>${l.map((b, i) => `<option value="${i}"${i === cur ? " selected" : ""}>${esc(b.name)} · ${esc(b.fac)} · ${esc(b.when)}</option>`).join("")}</select><button class="x" id="a-savedel" ${cur < 0 ? "disabled" : ""} title="Borrar el ejército elegido" aria-label="Borrar">✕</button></div>`
     : `<span class="empty">Aún no has guardado ningún ejército.</span>`;
 }
 
@@ -569,7 +571,16 @@ function renderBuffs() {
       : `<span class="muted bnone">${R.troops.length ? "Ninguna unidad del ejército recibe mejoras concretas." : "Añade unidades para ver cuáles mejoran."}</span>`}
     </div>`;
 }
+// borrar en dos toques: el primero arma el botón («¿Borrar?») durante 3 s, el segundo borra
+function armDelete(btn) {
+  if (btn.dataset.armed) { delete btn.dataset.armed; return true; }
+  btn.dataset.armed = "1"; const t = btn.textContent; btn.textContent = "¿Borrar?"; btn.classList.add("armed");
+  setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = t; btn.classList.remove("armed"); } }, 3000);
+  return false;
+}
+window.armDelete = armDelete;
 document.addEventListener("change", e => {
+  if (e.target.id === "a-savedsel") { if (e.target.value !== "") openSaved(+e.target.value); return; }
   const s = e.target.closest && e.target.closest("[data-bsel]"); if (!s) return;
   const id = s.dataset.bsel, v = s.value;
   if (v === "") delete A.builds[id];
@@ -720,8 +731,10 @@ document.addEventListener("click", e => {
     openTree(A.fac, e.k, null, cur ? cur.lv : null, cur && cur.t >= 0 ? cur.t : null); return;
   }
   if ((b = g("[data-tree]"))) { openTree(A.fac, b.dataset.tree, null, null); return; }
-  if ((b = g("[data-aopen]"))) { openSaved(+b.dataset.aopen); return; }
-  if ((b = g("[data-adel]"))) { const l = loadArmies(), [d] = l.splice(+b.dataset.adel, 1); if (d && window.WH3SYNC) WH3SYNC.removed("army", d.id); storeArmies(l); if (d && d.id === A.saveId) A.saveId = null; renderSaveButtons(); renderSavedArmies(); return; }
+  if ((b = g("#a-savedel"))) {
+    const i = +$("#a-savedsel").value; if ($("#a-savedsel").value === "") return;
+    if (!armDelete(b)) return;
+    const l = loadArmies(), [d] = l.splice(i, 1); if (d && window.WH3SYNC) WH3SYNC.removed("army", d.id); storeArmies(l); if (d && d.id === A.saveId) A.saveId = null; renderSaveButtons(); renderSavedArmies(); return; }
   if ((b = g("[data-sid]"))) { const id = b.dataset.sid; A.sel = armyEntries().find(x => x.id === id) || null; renderSlots(); renderStats(); return; }
   if ((b = g("[data-su]")) || (b = g("[data-sa]"))) {
     const add = b.dataset.su ? {t: "u", k: b.dataset.su} : {t: A.tab === "lords" ? "L" : "h", k: b.dataset.sa};
@@ -737,6 +750,10 @@ document.addEventListener("click", e => {
 
 // ---------- estilos ----------
 document.head.insertAdjacentHTML("beforeend", `<style>
+.ssel{display:flex;gap:6px;align-items:center}
+.ssel select{flex:1;min-width:0;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:2px;font:inherit;font-size:13px}
+.ssel .x{background:none;border:1px solid var(--line);color:var(--muted);border-radius:2px;cursor:pointer;padding:5px 8px;font-size:12px;white-space:nowrap}
+.ssel .x:disabled{opacity:.35;cursor:default}.ssel .x.armed{color:#f3c5b5;border-color:#a0483c;background:#3a1512}
 #a-slots .slot.over{outline:2px dashed var(--gold2);outline-offset:-2px}
 .slot .bf{position:absolute;top:20px;left:3px;z-index:2;background:#1d3b1c;color:#bfe7a6;border:1px solid #6fae5a;border-radius:2px;font:600 11px/1 var(--body,inherit);padding:2px 4px;pointer-events:auto}
 .slot .bf.b{background:#3a2c14;color:var(--gold2);border-color:var(--gold)}
