@@ -35,7 +35,8 @@ function unitThumb(ui) {
 window.unitThumb = unitThumb;
 
 // ---------- estado ----------
-const A = {fac: null, lord: null, items: [], pos: {}, sel: null, tab: "lords", caste: "", q: "", pick: null, name: "", nid: 1};
+// builds: build de habilidades de cada personaje, por id («L» = señor): {lv, t} como en el árbol de esta facción
+const A = {fac: null, lord: null, items: [], pos: {}, sel: null, tab: "lords", caste: "", q: "", pick: null, name: "", nid: 1, builds: {}};
 const newId = () => "i" + (A.nid++);
 function facUnits(fk) { return (EJ.f[fk] || []).map(([i, ...s]) => ({u: EJ.u[i], src: s.map(x => EJ.src[x])})); }
 // orden de las listas: nivel y nombre, con cada Regimiento de Renombre justo detrás de su unidad base (u.b)
@@ -99,18 +100,20 @@ const charTags = (a, k) => { const ev = k && evoFrom(k);
 // ---------- enlace ----------
 // e2.<facción>.<señor|_>.<elementos separados por ~ (héroes con prefijo h-)>.<casilla de cada uno en base 36, 2 cifras, -- si no está colocada>
 // e1 = lo mismo con la cuadrícula antigua de 16 columnas: se lee pasando cada casilla a la misma fila y columna
+// .b<builds> opcional al final: por personaje con build, <posición en base 36 (0 = señor, n = elemento n)>_<puntos>[_<rasgo>], con ~
 function armyToken() {
   const items = A.items.map(it => (it.t === "h" ? "h-" : "") + it.k).join("~");
   const ids = ["L", ...A.items.map(it => it.id)];
   const pos = ids.map(id => A.pos[id] === undefined ? "--" : A.pos[id].toString(36).padStart(2, "0")).join("");
-  return ["e2", D.factions[A.fac].k, A.lord || "_", items || "_", pos.replace(/(--)+$/, "") || "_"].join(".");
+  const bs = ids.map((id, j) => { const b = A.builds[id]; return b && (id !== "L" || A.lord) ? `${j.toString(36)}_${b.lv}${b.t >= 0 ? "_" + b.t : ""}` : ""; }).filter(Boolean).join("~");
+  return ["e2", D.factions[A.fac].k, A.lord || "_", items || "_", pos.replace(/(--)+$/, "") || "_"].join(".") + (bs ? ".b" + bs : "");
 }
 function armyFromToken(t) {
-  const m = /^e([12])\.([a-z0-9_]+)\.([a-z0-9_]+)\.([a-z0-9_~-]+)\.([0-9a-z-_]+)$/i.exec(t || ""); if (!m) return false;
-  const old = m[1] === "1"; m.splice(1, 1);  // m[1] facción, m[2] señor, m[3] elementos, m[4] casillas
+  const m = /^e([12])\.([a-z0-9_]+)\.([a-z0-9_]+)\.([a-z0-9_~-]+)\.([0-9a-z-_]+)(?:\.b([0-9a-z_~]+))?$/i.exec(t || ""); if (!m) return false;
+  const old = m[1] === "1"; m.splice(1, 1);  // m[1] facción, m[2] señor, m[3] elementos, m[4] casillas, m[5] builds
   const fi = facIdx[m[1]]; if (fi === undefined) return false;
   const f = D.factions[fi], ok = new Set((EJ.f[f.k] || []).map(([i]) => EJ.u[i].k));
-  A.fac = fi; A.lord = facLords(f).includes(m[2]) ? m[2] : null; A.items = []; A.pos = {}; A.sel = null; A.pick = null;
+  A.fac = fi; A.lord = facLords(f).includes(m[2]) ? m[2] : null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.builds = {};
   const skipped = [], over = [];
   const raw = m[3] === "_" ? [] : m[3].split("~");
   const keep = [];  // índice en raw de cada elemento aceptado (para leer su casilla)
@@ -127,6 +130,12 @@ function armyFromToken(t) {
   const put = (id, c) => { if (c !== undefined && c < GRID_W * GRID_H && !taken.has(c)) { A.pos[id] = c; taken.add(c); } };
   if (A.lord) put("L", cell(0));
   A.items.forEach((it, x) => put(it.id, cell(keep[x])));
+  for (const e of (m[5] || "").split("~")) {
+    const [p, lv, tr] = e.split("_"); if (!p || !lv) continue;
+    const j = parseInt(p, 36), id = j === 0 ? (A.lord ? "L" : null) : (A.items[keep.indexOf(j)] || {}).id;
+    const it = id && armyEntries().find(x => x.id === id);
+    if (it && it.t === "h" && hasTree(it.k)) A.builds[id] = {lv, t: tr != null ? +tr : -1};
+  }
   renderArmyAll(); show("v-army");
   if (skipped.length || over.length) armyMsg([skipped.length ? `No se han cargado ${skipped.length} elementos que esta facción ya no puede reclutar.` : "",
     over.length ? `No se han cargado ${over.length} elementos que superaban el límite del juego (legendarios y renombre: uno; unidades con límite en campaña).` : ""].filter(Boolean).join(" "));
@@ -176,10 +185,16 @@ function renderSavedArmies() {
 
 // ---------- abrir ----------
 function openArmy(fi) {
-  if (A.fac !== fi) { A.fac = fi; A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.caste = ""; A.q = ""; A.saveId = null; }
+  if (A.fac !== fi) { A.fac = fi; A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.caste = ""; A.q = ""; A.saveId = null; A.builds = {}; }
   renderArmyAll(); show("v-army");
 }
 window.openArmy = openArmy; window.armyFromToken = armyFromToken;
+// vuelta desde el árbol («Guardar y usar en el ejército»): asigna la build guardada b al personaje id
+window.useArmyBuild = (id, b) => {
+  const e = armyEntries().find(x => x.id === id), fi = A.fac;
+  if (e && b) { const c = buildForFaction(b.t, fi); if (c) A.builds[id] = c; }
+  return window.openArmy(fi).then(() => { armyChanged(); const el = $("#a-buffs"); if (el) el.scrollIntoView({behavior: "smooth", block: "start"}); });
+};
 
 function renderArmyAll() {
   const f = D.factions[A.fac];
@@ -206,6 +221,7 @@ function renderArmyAll() {
           <div id="a-tray" class="tray"></div>
           <div class="fieldwrap"><div class="fieldin"><div class="front">▲ Frente · enemigo ▲</div><div id="a-field" class="field" style="grid-template-columns:repeat(${GRID_W},var(--cw))"></div><div class="rear">Retaguardia</div></div></div>
         </div>
+        <div class="frame abox" id="a-buffs"></div>
       </div>
       <aside class="ustats frame" id="a-stats"></aside>
     </div>`;
@@ -219,12 +235,12 @@ function renderArmyAll() {
   $("#a-save").onclick = () => saveArmy();
   $("#a-saveas").onclick = () => saveArmy(true);
   // «Nuevo ejército» empieza uno en blanco que se guardará aparte; «Vaciar» solo quita las unidades del que estás editando
-  $("#a-new").onclick = () => { A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.saveId = null; $("#a-name").value = ""; armyChanged(); renderSaveButtons(); renderSavedArmies(); armyMsg("Ejército nuevo: al guardarlo se añadirá a «Mis ejércitos»."); };
-  $("#a-clear").onclick = () => { A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; armyChanged(); };
+  $("#a-new").onclick = () => { A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.saveId = null; A.builds = {}; $("#a-name").value = ""; armyChanged(); renderSaveButtons(); renderSavedArmies(); armyMsg("Ejército nuevo: al guardarlo se añadirá a «Mis ejércitos»."); };
+  $("#a-clear").onclick = () => { A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.builds = {}; armyChanged(); };
   renderRoster(); renderArmy(); renderSaveButtons(); renderSavedArmies();
 }
 function armyChanged() { renderArmy(); renderRoster(); syncHash(); }
-function renderArmy() { renderSlots(); renderTotals(); renderField(); renderStats(); }
+function renderArmy() { renderBuffs(); renderSlots(); renderTotals(); renderField(); renderStats(); }
 
 // ---------- lista para elegir ----------
 function renderRoster() {
@@ -263,7 +279,9 @@ function renderRoster() {
 function slotHtml(it, id, isLord) {
   const st = itemStats(it), name = itemName(it);
   const img = it.t === "u" ? unitCard(it.k) : agentCrest(it.k, true);
-  return `<div class="slot${isLord ? " lord" : ""}${A.sel && A.sel.id === id ? " on" : ""}" data-sid="${id}" tabindex="0" role="button" aria-label="${esc(name)}">${img}
+  const nb = it.t === "u" ? BUFFED.get(it.k) || 0 : 0, bb = it.t === "h" && A.builds[id];
+  const badge = nb ? `<span class="bf" title="Mejorada por ${nb} ${nb === 1 ? "efecto" : "efectos"} de las builds">▲${nb}</span>` : bb ? `<span class="bf b" title="Build: ${esc(buildName(it.k, bb))}">✦</span>` : "";
+  return `<div class="slot${isLord ? " lord" : ""}${nb ? " buffed" : ""}${A.sel && A.sel.id === id ? " on" : ""}" data-sid="${id}" tabindex="0" role="button" aria-label="${esc(name)}">${img}${badge}
     <span class="sn">${esc(name)}</span>${st && st.cost ? (isLord && startLord(it.k) ? `<span class="sc" title="Señor inicial de la facción: no se paga">Inicial</span>` : `<span class="sc">${st.cost}</span>`) : ""}<button class="rm" data-rm="${id}" aria-label="Quitar ${esc(name)}">✕</button></div>`;
 }
 function renderSlots() {
@@ -385,12 +403,121 @@ document.addEventListener("click", e => {
   if (window.matchMedia("(max-width:1180px)").matches) $("#u-stats").scrollIntoView({behavior: "smooth", block: "start"});
 });
 
+// ---------- builds de habilidades en el ejército ----------
+// Cada señor o héroe puede llevar una build guardada en el árbol («Mis builds»). Se suman los efectos que el juego aplica
+// al ejército (ámbitos «ejército del señor», «ejército del héroe», todo el ejército...), no los del propio personaje
+// ni los de provincia, región o enemigos. Los que nombran unidades (conjuntos de unidades del juego) se cruzan con las
+// unidades del ejército; los que no, valen para todo el ejército.
+const hasTree = k => D.agents[k] && !D.agents[k].sa;
+const ARMY_SC = /^(general_to_force_own|agent_to_parent_army_own|character_to_force_own|character_when_commanding_to_force_own|force_to_force_own|army_to_army_own|faction_to_force_own|faction_to_army_own|region_to_force_own|character_to_faction_leader_force)/;
+const NOT_ARMY = /enemy|ally/;
+const dkIdx = Object.fromEntries(EJ.dk.map((k, i) => [k, i]));
+const hitCache = new Map();
+// unidades (índices de D.units) del conjunto de unidades del efecto, con las mismas reglas que unitsFor de index.html
+function effectUnits(ei) {
+  if (hitCache.has(ei)) return hitCache.get(ei);
+  const e = D.effects[ei], out = new Set();
+  for (const si of e.us || []) {
+    const inc = new Set(), exc = new Set();
+    for (const [c, cat, cl, rec, ex] of D.unit_sets[si] || []) {
+      const tgt = ex ? exc : inc;
+      if (rec >= 0) { tgt.add(rec); continue; }
+      if (rec === -2 || (!c && !cat && !cl)) continue;
+      D.units.forEach((u, ui) => { if ((c || (u[2] !== "lord" && u[2] !== "hero")) && (!c || u[2] === c) && (!cat || u[3] === cat) && (!cl || u[4] === cl)) tgt.add(ui); });
+    }
+    for (const ui of inc) if (!exc.has(ui)) out.add(ui);
+  }
+  for (const ui of e.ur || []) out.add(ui);
+  out.names = new Set([...out].map(ui => D.units[ui] && D.units[ui][1].join(",") + "|" + D.units[ui][0]));
+  hitCache.set(ei, out); return out;
+}
+// ¿mejora el efecto a la unidad key? por su entrada en D.units, o por nombre y raza (unidades fusionadas en ejercitos.py)
+function unitHit(ei, key, ri) {
+  const set = effectUnits(ei), ui = dkIdx[key];
+  if (ui !== undefined && set.has(ui)) return true;
+  const u = EJ.u[ukIdx[key]]; if (!u) return false;
+  for (const x of set) { const d = D.units[x]; if (d && d[0] === u.n && d[1].includes(ri)) return true; }
+  return false;
+}
+// builds guardadas pasadas a esta facción (caché por token)
+const convCache = new Map();
+function savedFor(k) {
+  return loadSaved().map((b, i) => ({b, i})).filter(({b}) => { const p = parseToken(b.t); return p && p.agent === k; }).map(x => {
+    const ck = x.b.t + "|" + A.fac; if (!convCache.has(ck)) convCache.set(ck, buildForFaction(x.b.t, A.fac));
+    return {...x, c: convCache.get(ck)};
+  }).filter(x => x.c);
+}
+const sameBuild = (a, b) => a && b && a.lv.replace(/0+$/, "") === b.lv.replace(/0+$/, "") && (a.t ?? -1) === (b.t ?? -1);
+function buildName(k, b) { const s = savedFor(k).find(x => sameBuild(x.c, b)); return s ? s.b.name : "Build del enlace"; }
+let BUFFED = new Map();  // unidad -> nº de efectos de las builds que la mejoran (resalta cartas y fichas)
+function armyBuffs() {
+  const ri = raceIdx[D.factions[A.fac].sc];
+  const troops = [...new Set(A.items.filter(it => it.t === "u").map(it => it.k))];
+  const all = new Map(), per = new Map();
+  const add = (m, ei, si, v, src) => { const k = ei + ":" + si, x = m.get(k) || {ei, si, v: 0, src: []}; x.v += v; if (!x.src.includes(src)) x.src.push(src); m.set(k, x); };
+  for (const e of armyEntries()) {
+    const b = A.builds[e.id]; if (e.t !== "h" || !b) continue;
+    const r = buildSources(A.fac, e.k, b.lv, b.t); if (!r) continue;
+    const who = D.agents[e.k].n;
+    for (const [label, effs] of r.src) for (const [ei, si, v] of effs) {
+      const ef = D.effects[ei]; if (!ef || si < 0 || !ef.t || !ef.t.trim()) continue;
+      const sk = D.scope_keys[si]; if (!ARMY_SC.test(sk) || NOT_ARMY.test(sk)) continue;
+      const src = `${label} (${who})`;
+      // si alcanza a todas las unidades del ejército se lista con los de todo el ejército (no hay nada que resaltar)
+      const hit = ef.us || ef.ur ? troops.filter(k => unitHit(ei, k, ri)) : null;
+      if (hit && hit.length < troops.length) for (const k of hit) { if (!per.has(k)) per.set(k, new Map()); add(per.get(k), ei, si, v, src); }
+      else if (!hit || hit.length) add(all, ei, si, v, src);
+    }
+  }
+  return {all, per, troops};
+}
+function buffLi(x) {
+  const f = fmtEffect(x.ei, x.si, x.v); if (!f) return "";
+  return `<li><span class="${f.good ? "pos" : "neg"}">${esc(f.t)}</span><div class="bsrc">${esc(x.src.join(" · "))}</div></li>`;
+}
+function renderBuffs() {
+  const el = $("#a-buffs"); if (!el) return;
+  const R = armyBuffs(); BUFFED = new Map([...R.per].map(([k, m]) => [k, m.size]));
+  const chars = armyEntries().filter(e => e.t === "h");
+  const rows = chars.map(e => {
+    const a = D.agents[e.k], b = A.builds[e.id], role = e.id === "L" ? "Señor" : "Héroe";
+    if (!hasTree(e.k)) return `<div class="bchar">${agentCrest(e.k)}<div class="t"><b>${esc(a.n)}</b> · <span class="muted">${role}</span><br><span class="muted">El juego no le da árbol de habilidades.</span></div></div>`;
+    const sv = savedFor(e.k), cur = b ? sv.find(x => sameBuild(x.c, b)) : null, r = b && buildSources(A.fac, e.k, b.lv, b.t);
+    const opts = `<option value="">Sin build</option>` + sv.map(x => `<option value="${x.i}"${cur && cur.i === x.i ? " selected" : ""}>${esc(x.b.name)}</option>`).join("")
+      + (b && !cur ? `<option value="cur" selected>Build del enlace</option>` : "");
+    return `<div class="bchar${b ? " on" : ""}">${agentCrest(e.k)}<div class="t"><b>${esc(a.n)}</b> · <span class="muted">${role}</span>
+      <div class="brow"><select data-bsel="${e.id}" aria-label="Build de ${esc(a.n)}">${opts}</select><button class="btn ghost sm" data-bedit="${e.id}">${b ? "Editar en el árbol" : "Crear en el árbol"}</button></div>
+      ${r ? `<div class="muted">Nivel ${r.rank} · ${r.spent} puntos</div>` : sv.length ? "" : `<div class="muted">Aún no tienes builds guardadas de este personaje.</div>`}</div></div>`;
+  }).join("");
+  const nb = chars.filter(e => A.builds[e.id]).length;
+  const allFx = [...R.all.values()].map(buffLi).join("");
+  const units = R.troops.filter(k => R.per.has(k)), rest = R.troops.filter(k => !R.per.has(k));
+  el.innerHTML = `<div class="fhd"><h3>Builds de habilidades</h3><span class="muted">Asigna a tu señor y a tus héroes una build guardada en el árbol de habilidades («Guardar» en su ficha) o créala desde aquí. Se suman solo los efectos que el juego aplica a su ejército; los del propio personaje están en su hoja del árbol.</span></div>
+    ${rows ? `<div class="bchars">${rows}</div>` : `<p class="empty">Elige un señor o añade héroes para asignarles una build.</p>`}
+    ${nb ? `<div class="bres">
+      <div><h4>Todo el ejército</h4>${allFx ? `<ul class="fx">${allFx}</ul>` : `<p class="empty">Ningún efecto de las builds afecta a todo el ejército.</p>`}</div>
+      <div><h4>Unidades mejoradas <span class="muted">(${units.length} de ${R.troops.length})</span></h4>${units.length ? `<p class="muted" style="font-size:12px;margin:0 0 6px">Resaltadas en verde en el ejército y en el campo; ▲N = efectos que la mejoran. Toca una para ver los efectos.</p>` : ""}${units.length ? `<div class="bunits">${units.map(k => {
+        const u = EJ.u[ukIdx[k]], m = R.per.get(k);
+        const sk = [...new Set([...m.values()].flatMap(x => x.src))];
+        return `<details class="bunit" data-bu="${k}"><summary>${unitCard(k, "mini")}<div class="t"><b>${esc(u.n)}</b> <small class="muted">×${m.size}</small><div class="bsrc">${esc(sk.join(" · "))}</div></div></summary><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></details>`;
+      }).join("")}</div>` : `<p class="empty">${R.troops.length ? "Ninguna habilidad de las builds nombra a las unidades de este ejército." : "Añade unidades al ejército para ver cuáles mejoran."}</p>`}
+      ${rest.length && units.length ? `<p class="muted" style="font-size:12px">Sin mejoras concretas: ${rest.map(k => esc(EJ.u[ukIdx[k]].n)).join(", ")}.</p>` : ""}</div>
+    </div>` : ""}`;
+}
+document.addEventListener("change", e => {
+  const s = e.target.closest && e.target.closest("[data-bsel]"); if (!s) return;
+  const id = s.dataset.bsel, v = s.value;
+  if (v === "") delete A.builds[id];
+  else if (v !== "cur") { const b = loadSaved()[+v], c = b && buildForFaction(b.t, A.fac); if (c) A.builds[id] = c; }
+  armyChanged();
+});
+
 // ---------- formación ----------
 function armyEntries() { return [...(A.lord ? [{id: "L", t: "h", k: A.lord}] : []), ...A.items]; }
 function tokHtml(e) {
   const img = e.t === "u" ? unitImgSrc(e.k) : (RETRATOS.a[e.k] !== undefined ? RETRATOS.img[RETRATOS.a[e.k]] : null);
   const name = itemName(e);
-  return `<div class="tok${e.id === "L" ? " lord" : e.t === "h" ? " hero" : ""}${A.pick === e.id ? " pick" : ""}" data-tok="${e.id}" title="${esc(name)}">${img ? `<img src="${img}" alt="" draggable="false">` : `<span>${esc(initials(name))}</span>`}<em>${esc(name)}</em></div>`;
+  return `<div class="tok${e.id === "L" ? " lord" : e.t === "h" ? " hero" : ""}${e.t === "u" && BUFFED.get(e.k) ? " buffed" : ""}${A.pick === e.id ? " pick" : ""}" data-tok="${e.id}" title="${esc(name)}">${img ? `<img src="${img}" alt="" draggable="false">` : `<span>${esc(initials(name))}</span>`}<em>${esc(name)}</em></div>`;
 }
 function renderField() {
   const ents = armyEntries(), byCell = new Map();
@@ -415,7 +542,7 @@ function placeAt(id, cell) {
 let adrag = null, swallowClick = false;
 // recluta {t: "L"|"h"|"u", k}; devuelve el id en el ejército o null si no cabe
 function recruit(add) {
-  if (add.t === "L") { A.lord = add.k; return "L"; }
+  if (add.t === "L") { if (A.lord !== add.k) delete A.builds.L; A.lord = add.k; return "L"; }
   if (add.t === "h") { if (!canAddHero(add.k)) return null; const it = {t: "h", k: add.k, id: newId()}; A.items.push(it); return it.id; }
   const u = EJ.u[ukIdx[add.k]]; if (!u || !canAddUnit(u)) return null;
   const it = {t: "u", k: u.k, id: newId()}; A.items.push(it); return it.id;
@@ -494,7 +621,7 @@ document.addEventListener("click", e => { if (swallowClick) { e.stopPropagation(
 
 // ---------- clics ----------
 function removeItem(id) {
-  delete A.pos[id];
+  delete A.pos[id]; delete A.builds[id];
   if (id === "L") A.lord = null; else A.items = A.items.filter(it => it.id !== id);
   if (A.sel && A.sel.id === id) A.sel = null; armyChanged();
 }
@@ -519,8 +646,14 @@ document.addEventListener("click", e => {
   let b;
   if ((b = g("[data-au]"))) { const u = EJ.u[ukIdx[b.dataset.au]]; if (canAddUnit(u)) { const it = {t: "u", k: u.k, id: newId()}; A.items.push(it); A.sel = it; armyChanged(); } return; }
   if ((b = g("[data-ah]"))) { if (canAddHero(b.dataset.ah)) { const it = {t: "h", k: b.dataset.ah, id: newId()}; A.items.push(it); A.sel = it; armyChanged(); } return; }
-  if ((b = g("[data-al]"))) { A.lord = b.dataset.al; A.sel = {id: "L", t: "h", k: A.lord}; armyChanged(); return; }
+  if ((b = g("[data-al]"))) { if (A.lord !== b.dataset.al) delete A.builds.L; A.lord = b.dataset.al; A.sel = {id: "L", t: "h", k: A.lord}; armyChanged(); return; }
   if ((b = g("[data-rm]"))) { removeItem(b.dataset.rm); return; }
+  if ((b = g("[data-bedit]"))) {
+    const id = b.dataset.bedit, e = armyEntries().find(x => x.id === id); if (!e) return;
+    const cur = A.builds[id];
+    window.ARMY_EDIT = {fi: A.fac, id, k: e.k, n: cur ? buildName(e.k, cur).replace(/^Build del enlace$/, "") : ""};
+    openTree(A.fac, e.k, null, cur ? cur.lv : null, cur && cur.t >= 0 ? cur.t : null); return;
+  }
   if ((b = g("[data-tree]"))) { openTree(A.fac, b.dataset.tree, null, null); return; }
   if ((b = g("[data-aopen]"))) { openSaved(+b.dataset.aopen); return; }
   if ((b = g("[data-adel]"))) { const l = loadArmies(), [d] = l.splice(+b.dataset.adel, 1); storeArmies(l); if (d && d.id === A.saveId) A.saveId = null; renderSaveButtons(); renderSavedArmies(); return; }
@@ -540,6 +673,26 @@ document.addEventListener("click", e => {
 // ---------- estilos ----------
 document.head.insertAdjacentHTML("beforeend", `<style>
 #a-slots .slot.over{outline:2px dashed var(--gold2);outline-offset:-2px}
+.slot .bf{position:absolute;top:20px;left:3px;z-index:2;background:#1d3b1c;color:#bfe7a6;border:1px solid #6fae5a;border-radius:2px;font:600 11px/1 var(--body,inherit);padding:2px 4px;pointer-events:auto}
+.slot .bf.b{background:#3a2c14;color:var(--gold2);border-color:var(--gold)}
+#a-slots .slot.buffed{border-color:#6fae5a;box-shadow:0 0 8px -1px #6fae5a99}
+.tok.buffed{box-shadow:0 0 0 2px #6fae5a,0 0 10px #6fae5a99}
+.bchars{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin:8px 0}
+.bchar{display:flex;gap:8px;align-items:flex-start;padding:6px;border:1px solid var(--line);border-radius:2px;background:#0d0b0966;font-size:13px}
+.bchar.on{border-color:var(--gold)}
+.bchar .crest{width:34px;height:34px;flex:none}.bchar img.crest.face{width:30px;height:65px}
+.bchar .t{min-width:0;flex:1}
+.brow{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.brow select{flex:1;min-width:0;max-width:100%;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:5px 6px;border-radius:2px;font:inherit}
+.btn.sm{padding:4px 8px;font-size:12px}
+.bres{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:14px}
+.bres h4{margin:6px 0;font:15px var(--display);color:var(--gold)}
+.bunits{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.bunit{padding:6px;border:1px solid #6fae5a66;border-radius:2px;background:#0d0b0966;font-size:13px;align-self:start}
+.bunit summary{display:flex;gap:8px;align-items:flex-start;cursor:pointer;list-style:none}.bunit summary::-webkit-details-marker{display:none}
+.bunit[open]{border-color:#6fae5a}.bunit .t{min-width:0}.bunit ul.fx{margin:6px 0 0}
+.bsrc{font-size:11px;color:var(--muted)}
+@media (max-width:900px){.bres{grid-template-columns:1fr}}
 .saved div.on button.l{color:var(--gold2);font-weight:600}
 .army{display:grid;grid-template-columns:330px minmax(0,1fr) 300px;gap:14px;align-items:start}
 .roster,.ustats{padding:12px;position:sticky;top:70px;max-height:calc(100vh - 90px);overflow:auto;display:grid;gap:8px;align-content:start}

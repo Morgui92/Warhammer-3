@@ -121,6 +121,8 @@ ul.fx li::before{content:"◆";position:absolute;left:0;top:1px;font-size:9px;co
 .topt.on{border-color:var(--gold);background:var(--panel2)}
 .topt input{margin-top:3px;accent-color:var(--gold)}
 .topt ul.fx li{font-size:13px}
+.bname{width:100%;min-width:0;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:7px 10px;border-radius:2px;font:inherit}
+.armyuse{width:100%;margin-top:6px}
 .linkbox{width:100%;font:12px ui-monospace,monospace;background:#0d0b09;color:var(--muted);border:1px solid var(--line);padding:6px;border-radius:2px}
 .saved{display:grid;gap:4px;max-height:180px;overflow:auto}
 .saved div{display:flex;gap:6px;align-items:center;font-size:13px}
@@ -438,7 +440,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.7.1";
+const SIM_VERSION = "2.8";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -701,14 +703,19 @@ function remove(j) { if (S.lv[j] > 0 && !isAuto(S.tree.vis[j])) { S.lv[j]--; val
 
 // ---------- token de build (solo letras, dígitos, . _ ~ - para que viaje en el enlace) ----------
 const B36 = "0123456789abcdefghijklmnopqrstuvwxyz";
+const lvString = () => S.tree.vis.map((n, j) => isAuto(n) ? "0" : B36[S.lv[j] || 0]).join("").replace(/0+$/, "") || "0";
 function token() {
-  const lv = S.tree.vis.map((n, j) => isAuto(n) ? "0" : B36[S.lv[j] || 0]).join("").replace(/0+$/, "");
-  return ["b1", S.tree.f.k, S.agent, S.rank, lv || "0"].join(".") + (S.trait >= 0 ? ".t" + S.trait : "");
+  return ["b1", S.tree.f.k, S.agent, S.rank, lvString()].join(".") + (S.trait >= 0 ? ".t" + S.trait : "");
+}
+// partes de un token de build: {fk, agent, lv, t}
+function parseToken(t) {
+  const m = /^b1\.([a-z0-9_]+)\.([a-z0-9_]+)\.(\d+)\.([0-9a-z]*)(?:\.t(\d+))?$/i.exec(t || "");
+  return m ? {fk: m[1], agent: m[2], lv: m[4], t: m[5] != null ? +m[5] : -1} : null;
 }
 function fromToken(t) {
-  const m = /^b1\.([a-z0-9_]+)\.([a-z0-9_]+)\.(\d+)\.([0-9a-z]*)(?:\.t(\d+))?$/i.exec(t || ""); if (!m) return false;
-  const fi = facIdx[m[1]]; if (fi === undefined || !D.agents[m[2]]) return false;
-  openTree(fi, m[2], +m[3], m[4], m[5]); return true;
+  const p = parseToken(t); if (!p) return false;
+  const fi = facIdx[p.fk]; if (fi === undefined || !D.agents[p.agent]) return false;
+  openTree(fi, p.agent, 1, p.lv, p.t >= 0 ? p.t : null); return true;
 }
 function shareLink() { return (ARTIFACT_URL || "") + "#" + token(); }
 
@@ -871,7 +878,9 @@ function renderSheet() {
       <span class="muted" style="font-size:12px">Sube con cada punto que repartes</span></div>
     <div class="pts" id="pts"></div>
     <div class="lstats" id="lstats"></div>
+    <input class="bname" id="bname" placeholder="Nombre de la build (opcional)" aria-label="Nombre de la build" value="${esc(armyEditFor() ? armyEditFor().n || "" : "")}">
     <div class="btns"><button class="btn" id="copy">Copiar enlace</button><button class="btn ghost" id="reset">Reiniciar</button><button class="btn ghost" id="save">Guardar</button><button class="btn jump" id="jump">Ir al árbol ↓</button></div>
+    ${armyEditFor() ? `<button class="btn armyuse" id="armyuse" title="La guarda en «Mis builds» y se la asigna a este personaje en el ejército">Guardar y usar en el ejército ↩</button>` : ""}
     <div id="copymsg" class="copied" aria-live="polite"></div>
     <input class="linkbox" id="linkbox" readonly aria-label="Enlace de la build" hidden>
     <div><div class="lbl">Mis builds (este navegador)</div><div class="saved" id="saved"></div></div>
@@ -885,7 +894,8 @@ function renderSheet() {
   $("#sheet").querySelectorAll("input[name=trait]").forEach(r => r.onchange = () => { S.trait = +r.value; renderSheet(); try { history.replaceState(null, "", "#" + token()); } catch (e) {} });
   $("#reset").onclick = () => { S.lv = S.lv.map(() => 0); validate(); changed(); };
   $("#copy").onclick = copyLink;
-  $("#save").onclick = saveBuild;
+  $("#save").onclick = () => saveBuild();
+  if ($("#armyuse")) $("#armyuse").onclick = () => { const b = saveBuild(); const ed = armyEditFor(); window.ARMY_EDIT = null; window.useArmyBuild(ed.id, b); };
   $("#jump").onclick = () => $(".simmain").scrollIntoView({behavior: "smooth", block: "start"});
   renderSheetPoints(); renderSaved();
 }
@@ -979,11 +989,48 @@ async function copyLink() {
 const LS = "wh3-skill-builds";
 function loadSaved() { try { return JSON.parse(localStorage.getItem(LS) || "[]"); } catch (e) { return []; } }
 function storeSaved(list) { try { localStorage.setItem(LS, JSON.stringify(list)); } catch (e) {} }
+// con nombre propio (campo «Nombre de la build») o el automático; la misma build (mismo token) no se repite
 function saveBuild() {
-  const list = loadSaved(), t = token();
-  const name = `${D.agents[S.agent].n} · nivel ${S.rank} · ${spent()} pts`;
-  storeSaved([{name, t, when: new Date().toISOString().slice(0, 10)}, ...list.filter(x => x.t !== t)].slice(0, 40));
+  const list = loadSaved(), t = token(), own = (($("#bname") || {}).value || "").trim();
+  const name = own || `${D.agents[S.agent].n} · nivel ${S.rank} · ${spent()} pts`;
+  const b = {name, t, when: new Date().toISOString().slice(0, 10)};
+  storeSaved([b, ...list.filter(x => x.t !== t)].slice(0, 80));
   renderSaved(); $("#copymsg").textContent = "Build guardada en este navegador.";
+  return b;
+}
+// árbol abierto desde el ejército para elegir la build de un personaje (ejercito.js pone window.ARMY_EDIT)
+function armyEditFor() { const e = window.ARMY_EDIT; return e && e.fi === S.fac && e.k === S.agent ? e : null; }
+
+// Efectos de una build sin tocar la pantalla del árbol: carga los puntos en S, los valida con las reglas del árbol
+// (requisitos, nivel) y devuelve las fuentes como fixedSources (sin los efectos de facción, que no dependen del
+// personaje): [[etiqueta, [[efecto, ámbito, valor]...]]...], más el nivel y los puntos gastados.
+const buildCache = new Map();
+function buildSources(fi, agentKey, lvs, trait) {
+  const ck = [fi, agentKey, lvs, trait].join("|"); if (buildCache.has(ck)) return buildCache.get(ck);
+  if (!D.agents[agentKey] || D.agents[agentKey].sa) return null;
+  const keep = {...S};
+  try {
+    S.fac = fi; S.agent = agentKey; S.tree = treeFor(agentKey, fi); S.rank = 1;
+    S.trait = trait != null && trait >= 0 && trait < S.tree.traits.length ? +trait : -1;
+    S.lv = S.tree.vis.map((n, j) => lvs && j < lvs.length ? Math.min(B36.indexOf(lvs[j]), maxLv(n)) || 0 : 0);
+    validate();
+    const src = fixedSources().slice(0, -1).filter(([, e]) => e.length);
+    S.tree.vis.forEach((n, j) => { const l = S.lv[j] || 0; if (l) { const s = SK(n.s); src.push([s.n, s.lv[l - 1].e]); } });
+    const out = {src, rank: S.rank, spent: spent(), lv: lvString(), t: S.trait};
+    buildCache.set(ck, out); return out;
+  } finally { Object.assign(S, keep); }
+}
+// pasa una build guardada (token) al árbol de ese personaje en otra facción: los puntos van por habilidad, porque
+// las habilidades propias de cada facción cambian el orden de los nodos
+function buildForFaction(t, fi) {
+  const p = parseToken(t); if (!p || !D.agents[p.agent]) return null;
+  const sfi = facIdx[p.fk]; if (sfi === undefined) return null;
+  if (sfi === fi) return {lv: p.lv, t: p.t};
+  const from = treeFor(p.agent, sfi), to = treeFor(p.agent, fi), by = new Map();
+  from.vis.forEach((n, j) => { const c = p.lv[j]; if (c && c !== "0") by.set(n.s, c); });
+  const lv = to.vis.map(n => by.get(n.s) || "0").join("").replace(/0+$/, "") || "0";
+  const ts = p.t >= 0 && from.traits[p.t] ? from.traits[p.t].s : null, tt = ts == null ? -1 : to.traits.findIndex(n => n.s === ts);
+  return {lv, t: tt};
 }
 function renderSaved() {
   const list = loadSaved();

@@ -42,6 +42,17 @@
 
   // ---------- interfaz en inglés ----------
   const W = {
+    "Nombre de la build (opcional)": "Build name (optional)", "Nombre de la build": "Build name", "Guardar y usar en el ejército ↩": "Save and use in the army ↩",
+    "La guarda en «Mis builds» y se la asigna a este personaje en el ejército": "Saves it to «My builds» and assigns it to this character in the army",
+    "Builds de habilidades": "Skill builds", "Sin build": "No build", "Build del enlace": "Build from link", "Editar en el árbol": "Edit in the tree", "Crear en el árbol": "Create in the tree",
+    "Asigna a tu señor y a tus héroes una build guardada en el árbol de habilidades («Guardar» en su ficha) o créala desde aquí. Se suman solo los efectos que el juego aplica a su ejército; los del propio personaje están en su hoja del árbol.":
+      "Give your lord and heroes a build saved in the skill tree («Save» on their sheet) or create one from here. Only the effects the game applies to their army are added; the character's own effects are on their tree sheet.",
+    "El juego no le da árbol de habilidades.": "The game gives it no skill tree.", "Aún no tienes builds guardadas de este personaje.": "You have no saved builds for this character yet.",
+    "Elige un señor o añade héroes para asignarles una build.": "Choose a lord or add heroes to give them a build.", "Todo el ejército": "Whole army", "Unidades mejoradas": "Buffed units",
+    "Ningún efecto de las builds afecta a todo el ejército.": "No build effect applies to the whole army.",
+    "Ninguna habilidad de las builds nombra a las unidades de este ejército.": "No build skill targets the units in this army.",
+    "Añade unidades al ejército para ver cuáles mejoran.": "Add units to the army to see which ones get buffed.",
+    "Resaltadas en verde en el ejército y en el campo; ▲N = efectos que la mejoran. Toca una para ver los efectos.": "Highlighted in green in the army and on the field; ▲N = effects that buff it. Tap one to see the effects.",
     "Árbol de Habilidades WH3": "WH3 Skill Tree", "Árbol de Habilidades": "Skill Tree", "Navegación": "Navigation",
     "Elige facción": "Choose a faction", "Buscar facción, raza, señor o héroe…": "Search faction, race, lord or hero…",
     "Facciones": "Factions", "Señores": "Lords", "Héroes": "Heroes", "Unidades": "Units", "Ejército": "Army",
@@ -138,6 +149,9 @@
   const pl = (n, one, many) => +n === 1 ? one : many;
   // patrones con números o nombres dentro; se prueban en orden si la frase no está entera en W
   const R = [
+    [/^\((\d+) de (\d+)\)$/, "($1 of $2)"], [/^Nivel (\d+) · (\d+) puntos$/, "Rank $1 · $2 points"],
+    [/^Sin mejoras concretas: /, () => "No specific buffs: "], [/^Mejorada por (\d+) efectos? de las builds$/, (m, n) => `Buffed by ${n} build ${n === "1" ? "effect" : "effects"}`],
+    [/^Build de (.+)$/, "$1's build"],
     [/^Nivel (\d+)$/, "Rank $1"], [/^\(nivel (\d+)\)$/, "(rank $1)"],
     [/^Parche (.+)$/, (m, v) => "Patch " + v],
     [/^Simulador v(\S+) · Parche (.+)$/, (m, a, v) => `Simulator v${a} · Patch ${v}`],
