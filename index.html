@@ -66,6 +66,10 @@ ul.fx li::before{content:"◆";position:absolute;left:0;top:1px;font-size:9px;co
 .scope{color:var(--muted);font-size:12px}
 .tabs{display:flex;gap:4px;margin:6px 0 12px;border-bottom:1px solid var(--line)}
 .tabs button{background:none;border:1px solid transparent;border-bottom:0;padding:8px 16px;cursor:pointer;font:18px var(--display);color:var(--muted);border-radius:3px 3px 0 0}
+.fnav{align-items:flex-end;flex-wrap:wrap;margin:0 0 12px}
+.fnav .fnn{display:flex;align-items:center;gap:8px;margin-right:10px;padding:0 4px 6px;min-width:0}
+.fnav .fnn .crest{width:26px;height:26px;font-size:12px}.fnav .fnn b{font:17px var(--display);color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+@media (max-width:760px){.fnav{flex-wrap:nowrap;overflow-x:auto}.fnav .fnn b{display:none}}
 .tabs button[aria-selected="true"]{color:var(--gold2);border-color:var(--line);background:var(--panel2);margin-bottom:-1px}
 .tag{display:inline-block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:2px;border:1px solid var(--line);color:var(--muted)}
 .tag.leg{color:#1a1208;background:var(--gold);border-color:var(--gold2)}
@@ -386,6 +390,8 @@ ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
 </div></header>
 
 <main class="wrap">
+  <!-- pestañas de la facción también dentro del árbol y del ejército, para volver sin pasar por las migas -->
+  <nav class="tabs fnav" id="fnav" role="tablist" aria-label="Facción" hidden></nav>
   <section id="v-fac">
     <h1>Elige facción</h1>
     <div class="search"><input id="q" type="search" placeholder="Buscar facción, raza, señor o héroe…" autocomplete="off"><span class="muted" id="qcount"></span></div>
@@ -445,7 +451,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.11.5";
+const SIM_VERSION = "2.12";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -726,9 +732,20 @@ function shareLink() { return (ARTIFACT_URL || "") + "#" + token(); }
 
 // ---------- vistas ----------
 function show(id) {
-  for (const v of ["v-fac", "v-char", "v-tree", "v-army"]) $("#" + v).hidden = v !== id; crumbs(id); window.scrollTo(0, 0);
+  for (const v of ["v-fac", "v-char", "v-tree", "v-army"]) $("#" + v).hidden = v !== id; crumbs(id); renderFnav(id); window.scrollTo(0, 0);
   if (id === "v-tree" && S.tree) { drawLinks(); placeRowLabels(); }  // las medidas solo existen con la vista visible
 }
+function renderFnav(view) {
+  const nav = $("#fnav"), on = (view === "v-tree" || view === "v-army") && S.fac !== null && D.factions[S.fac];
+  nav.hidden = !on; if (!on) return;
+  const f = D.factions[S.fac], cur = view === "v-army" ? "army" : (f.lords || []).includes(S.agent) ? "lords" : "heroes";
+  nav.innerHTML = `<span class="fnn">${facCrest(f)}<b>${esc(f.n)}</b></span>` + [["lords", "Señores"], ["heroes", "Héroes"], ["units", "Unidades"], ["army", "Ejército"]]
+    .map(([k, n]) => `<button role="tab" data-ft="${k}" aria-selected="${k === cur}">${n}</button>`).join("");
+}
+$("#fnav").addEventListener("click", e => {
+  const b = e.target.closest("[data-ft]"); if (!b) return;
+  if (b.dataset.ft === "army") openArmy(S.fac); else { S.tab = b.dataset.ft; openFaction(S.fac); }
+});
 function crumbs(view) {
   const c = [`<button data-go="fac">Facciones</button>`];
   if (view !== "v-fac" && S.fac !== null) c.push(`<span class="sep">›</span>`, view === "v-char" ? `<span>${esc(D.factions[S.fac].n)}</span>` : `<button data-go="char">${esc(D.factions[S.fac].n)}</button>`);
