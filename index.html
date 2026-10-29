@@ -438,7 +438,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.7";
+const SIM_VERSION = "2.7.1";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -953,7 +953,7 @@ function renderLiveStats() {
   const row = (st, label, [b, x], unit = "", lowerBetter = false, extra = "") => {
     const d = +(x - b).toFixed(1), cls = !d ? "" : (d > 0) !== lowerBetter ? "up" : "down";
     const tipTxt = (L.why[st] || []).join("\n");
-    return `<div class="lsr${cls ? " ch" : ""}"${tipTxt ? ` title="${esc(tipTxt)}"` : ""}><span>${typeof ico === "function" ? ico(st) : ""}${label}</span><b class="${cls}">${st === "hp" && L.hpa ? "~" : ""}${loc(x)}${unit}${extra}</b>${d ? `<small class="${cls}">${d > 0 ? "+" : ""}${loc(d)}${unit}</small>` : ""}</div>`;
+    return `<div class="lsr${cls ? " ch" : ""}"${tipTxt ? ` title="${esc(tipTxt)}"` : ""}><span>${typeof ico === "function" ? ico(st) : ""}${label}</span><b class="${cls}">${st === "hp" && L.hpa ? "~" : ""}${loc(x)}${unit}${extra}</b></div>`;
   };
   const V = L.v, flag = (k, lbl, [b, x]) => x ? `<span class="lsf${!b ? " up" : ""}">${typeof ico === "function" ? ico(k) : ""}${lbl}</span>` : "";
   const flags = flag("mag", "Ataques mágicos", L.mag) + flag("fire", "Ataques de fuego", L.fire);
