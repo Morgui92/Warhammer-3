@@ -312,13 +312,20 @@ const startLord = k => (D.factions[A.fac].ll || []).includes(k);
 function renderTotals() {
   const all = [...(A.lord ? [{t: "h", k: A.lord}] : []), ...A.items].map(itemStats).filter(Boolean);
   const free0 = A.lord && startLord(A.lord) ? (charStats(A.lord) || {}).cost || 0 : 0;
-  const cost = all.reduce((t, u) => t + (u.cost || 0), 0) - free0, up = all.reduce((t, u) => t + (u.up || 0), 0);
+  // las unidades con mejoras de coste o mantenimiento (builds, innatos, facción) cuentan con su valor rebajado
+  const ents = [...(A.lord ? [{t: "h", k: A.lord}] : []), ...A.items], bfc = new Map(), whyC = [], whyU = [];
+  const val = (it, st) => { const u = itemStats(it); if (!u) return 0; if (it.t !== "u") return u[st] || 0;
+    if (!bfc.has(it.k)) bfc.set(it.k, unitBuffStats(it.k)); const bf = bfc.get(it.k); return bf && bf.v[st] != null ? bf.v[st] : u[st] || 0; };
+  const cost = ents.reduce((t, it) => t + val(it, "cost"), 0) - free0, up = ents.reduce((t, it) => t + val(it, "up"), 0);
+  const cost0 = all.reduce((t, u) => t + (u.cost || 0), 0) - free0, up0 = all.reduce((t, u) => t + (u.up || 0), 0);
+  for (const [k, bf] of bfc) if (bf) { const n = EJ.u[ukIdx[k]].n; if (bf.v.cost !== bf.b.cost) whyC.push(`${n}: ${bf.b.cost} → ${bf.v.cost}`); if (bf.v.up !== bf.b.up) whyU.push(`${n}: ${bf.b.up} → ${bf.v.up}`); }
+  const tot = (n, n0, why) => `<b${n < n0 ? ` class="up" title="${esc("Sin mejoras: " + n0.toLocaleString("es") + "\n" + why.join("\n"))}"` : ""}>${n.toLocaleString("es")}</b>`;
   const warn = [];
   for (const k of new Set(A.items.filter(it => it.t === "u").map(it => it.k))) {
     const u = EJ.u[ukIdx[k]], n = countOf(k);
     if (capOf(u) > 0 && n > capOf(u)) warn.push(`${u.n}: el juego limita esta unidad a ${capOf(u)}`);
   }
-  $("#a-totals").innerHTML = `<div><span class="lbl">Huecos</span><b>${used()} / ${ARMY_MAX}</b></div><div><span class="lbl">Reclutamiento</span><b>${cost.toLocaleString("es")}</b>${free0 ? `<small class="muted">Señor inicial: sin coste</small>` : ""}</div><div><span class="lbl">Mantenimiento</span><b>${up.toLocaleString("es")}</b></div>`
+  $("#a-totals").innerHTML = `<div><span class="lbl">Huecos</span><b>${used()} / ${ARMY_MAX}</b></div><div><span class="lbl">Reclutamiento</span>${tot(cost, cost0, whyC)}${free0 ? `<small class="muted">Señor inicial: sin coste</small>` : ""}</div><div><span class="lbl">Mantenimiento</span>${tot(up, up0, whyU)}</div>`
     + (warn.length ? `<div class="warn">${warn.map(esc).join("<br>")}</div>` : "");
 }
 
@@ -345,7 +352,8 @@ const phChip = i => { const p = EJ.ph && EJ.ph[i]; return p ? fxChip(SICON[p.ico
 function statsHtml(u, head, bf) {
   if (!u) return `<p class="empty">Sin estadísticas en la base de datos.</p>`;
   const N = (st, b) => bf && bf.v[st] != null ? bf.v[st] : b;
-  const cls = st => { if (!bf || bf.v[st] == null || bf.v[st] === bf.b[st]) return ""; return (bf.v[st] > bf.b[st]) !== (st === "rl") ? "up" : "down"; };
+  const lower = st => st === "rl" || st === "cost" || st === "up";  // aquí bajar es mejorar
+  const cls = st => { if (!bf || bf.v[st] == null || bf.v[st] === bf.b[st]) return ""; return (bf.v[st] > bf.b[st]) !== lower(st) ? "up" : "down"; };
   const box = (k, l, v, st = k) => { const c = cls(st), why = c && (bf.why[st] || []).join("\n");
     return `<div><span>${ico(k)}${l}</span><b${c ? ` class="${c}"` : ""}${why ? ` title="${esc(why)}"` : ""}>${v}</b></div>`; };
   const dmg = (bk, b, ak, ap) => `<small class="brk" title="daño base + perforante">${ico(bk)}${b} ${ico(ak)}${ap} AP</small>`;
@@ -361,7 +369,7 @@ function statsHtml(u, head, bf) {
       ${box("sp", u.fly ? "Vel. (vuelo)" : "Velocidad", N("sp", u.sp))}${box("ma", "Ataque c/c", N("ma", u.ma))}${box("md", "Defensa c/c", N("md", u.md))}${box("ch", "Carga", N("ch", u.ch))}
       ${box("ws", "Fuerza arma", `${N("ws", u.ws)} ${dmg("wb", N("wb", u.wb), "ap", N("wap", u.wap))}`)}${u.bvl || N("bvl", 0) ? box("bvl", "Bonus vs grandes", N("bvl", u.bvl || 0)) : ""}${u.bvi || N("bvi", 0) ? box("bvi", "Bonus vs inf.", N("bvi", u.bvi || 0)) : ""}${u.sh ? box("sh", "Escudo", N("sh", u.sh) + "%") : ""}
       ${r ? box("rng", "Alcance", N("rng", r.r)) + box("rs", "Proyectil", `${r.s}${r.np > 1 ? " ×" + r.np : ""} ${dmg("rb", N("rb", r.b), "rap", N("rap", r.ap))}`, "rpd") + box("am", "Munición", N("am", r.am)) + (r.rl ? box("rl", "Recarga", N("rl", r.rl) + " s") : "") : ""}
-      ${u.cost ? box("cost", "Coste", u.cost) : ""}${u.up ? box("up", "Mantenim.", u.up) : ""}${u.turn ? box("turn", "Turnos", u.turn) : ""}</div>
+      ${u.cost ? box("cost", "Coste", N("cost", u.cost)) : ""}${u.up ? box("up", "Mantenim.", N("up", u.up)) : ""}${u.turn ? box("turn", "Turnos", u.turn) : ""}</div>
     ${fxh ? `<div class="fx"><div class="lbl">Efectos de sus ataques <small>(pasa el ratón o toca para ver qué hacen)</small></div>${fxh}</div>` : ""}
     ${res ? `<div><span class="lbl">Resistencias</span> ${esc(res)}</div>` : ""}
     ${u.at && u.at.length ? `<div><span class="lbl">Atributos</span> ${esc(u.at.join(", "))}</div>` : ""}
@@ -538,7 +546,7 @@ function unitBuffStats(k) {
   if (!Object.keys(why).length) return null;
   const calc = (st, b) => b == null ? null : st === "rl" ? +(b * (1 - (pct[st] || 0) / 100)).toFixed(1) : Math.round((b + (add[st] || 0)) * (1 + (pct[st] || 0) / 100));
   const b = {}, v = {};
-  for (const st of ["hp", "arm", "ld", "sp", "ma", "md", "ch", "wb", "wap", "bvl", "bvi", "sh"]) { b[st] = u[st] || 0; v[st] = calc(st, b[st]); }
+  for (const st of ["hp", "arm", "ld", "sp", "ma", "md", "ch", "wb", "wap", "bvl", "bvi", "sh", "cost", "up"]) { b[st] = u[st] || 0; v[st] = calc(st, b[st]); }
   b.ws = b.wb + b.wap; v.ws = v.wb + v.wap; why.ws = [...(why.wb || []), ...(why.wap || [])];
   const r = u.rng;
   if (r) {
@@ -751,6 +759,7 @@ document.addEventListener("click", e => {
 // ---------- estilos ----------
 document.head.insertAdjacentHTML("beforeend", `<style>
 .saved:has(.ssel){grid-template-columns:minmax(0,1fr);overflow:visible;max-height:none}
+.atotals b.up{color:var(--good)}
 .ssel{display:flex;gap:6px;align-items:center;min-width:0;max-width:100%}
 .ssel select{flex:1 1 0;width:0;min-width:0;text-overflow:ellipsis;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:2px;font:inherit;font-size:13px}
 .ssel .x{background:none;border:1px solid var(--line);color:var(--muted);border-radius:2px;cursor:pointer;padding:5px 8px;font-size:12px;white-space:nowrap}
