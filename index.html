@@ -237,6 +237,10 @@ svg.glinks{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
 .uchip small{color:var(--muted)}
 .empty{color:var(--muted);font-style:italic;font-size:14px}
 
+/* v2.11.4: la hoja nunca se ensancha por dentro (lo que no cabe parte de línea en vez de quedar cortado) */
+.sheet{grid-template-columns:minmax(0,1fr);overflow-x:hidden}.sheet>*{min-width:0}
+.portrait h2,.portrait .muted{overflow-wrap:break-word}
+@media (min-width:1600px){.sim{grid-template-columns:290px minmax(0,1fr)}}
 @media (max-width:1180px){.sim{grid-template-columns:230px minmax(0,1fr)}}
 @media (max-width:760px){.sim{grid-template-columns:minmax(0,1fr)}.sheet{position:static;max-height:none;overflow:visible}.fhead{grid-template-columns:1fr}.brand{font-size:19px}.patch{font-size:10px;margin-left:0}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -441,7 +445,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.11.3";
+const SIM_VERSION = "2.11.4";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
