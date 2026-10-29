@@ -274,7 +274,7 @@ function renderRoster() {
       const tags = (u.rr ? `<span class="tag leg">Renombre</span> ` : "") + src.filter(s => s !== "Regimientos de Renombre").map(s => `<span class="tag" title="Formas de conseguirla">${esc(s)}</span> `).join("");
       const can = canAddUnit(u);
       const nb = ROSTER_BUFFED.get(u.k) || 0;
-      return `<div class="rrow${A.sel && A.sel.k === u.k ? " on" : ""}${nb ? " buffed" : ""}" data-su="${u.k}">${unitCard(u.k, "mini")}<span class="t"><b>${esc(u.n)}</b><br><span class="muted">${u.cost} oro · ${u.up}/turno</span> ${tags}</span>
+      return `<div class="rrow${A.sel && A.sel.k === u.k ? " on" : ""}${nb ? " buffed" : ""}" data-su="${u.k}">${unitCard(u.k, "mini")}<span class="t"><b>${esc(u.n)}</b><br>${rosterCost(u)} ${tags}</span>
         <button class="add" data-au="${u.k}" ${can ? "" : "disabled"} aria-label="Añadir ${esc(u.n)}" title="${esc(can ? "Añadir" : whyNot({t: "u", k: u.k}))}">+</button></div>`;
     }).join("")).join("") + (sin.length ? `<details class="sin"><summary class="muted">Unidades de la raza que no he podido ubicar en ninguna facción (${sin.length})</summary><ul>${sin.map(s => `<li>${esc(s)}</li>`).join("")}</ul></details>` : "")
       || `<p class="empty">Nada coincide.</p>`;
@@ -388,6 +388,12 @@ function renderStats() {
   }
 }
 
+// coste y mantenimiento en la lista de reclutamiento, rebajados (en verde) si alguna mejora del ejército los reduce
+function rosterCost(u) {
+  const bf = BUFFS && BUFFS.cand.has(u.k) ? unitBuffStats(u.k) : null;
+  const n = (st, x) => bf && bf.v[st] < x ? `<span class="pos" title="${esc("Sin mejoras: " + x + "\n" + (bf.why[st] || []).join("\n"))}">${bf.v[st]}</span>` : x;
+  return `<span class="muted">${n("cost", u.cost)} oro · ${n("up", u.up)}/turno</span>`;
+}
 function unitStatsBlock(k, fk, bf) {
   const u = EJ.u[ukIdx[k]], src = (facUnits(fk).find(x => x.u.k === k) || {src: []}).src;
   return statsHtml({...u, lim: capText(u, fk)}, `<div class="shd">${unitCard(k, "big")}<div><h3>${esc(u.n)}</h3><div class="muted">${CASTE_ES[u.c] || u.c}</div>${u.rr ? `<span class="tag leg">Regimiento de Renombre</span>` : ""}${src.filter(x => x !== "Regimientos de Renombre").map(x => `<div class="muted">Se consigue con: ${esc(x)}</div>`).join("")}</div></div>`, bf);
@@ -486,7 +492,7 @@ let BUFFED = new Map(), BUFFS = null, ROSTER_BUFFED = new Map();  // ROSTER_BUFF
 function armyBuffs() {
   const ri = raceIdx[D.factions[A.fac].sc];
   const troops = [...new Set(A.items.filter(it => it.t === "u").map(it => it.k))], facKeys = facUnits(D.factions[A.fac].k).map(x => x.u.k);
-  const all = new Map(), per = new Map(), sets = new Map();
+  const all = new Map(), per = new Map(), sets = new Map(), cand = new Map();  // cand: igual que per para todas las reclutables
   const add = (m, ei, si, v, src) => { const k = ei + ":" + si, x = m.get(k) || {ei, si, v: 0, src: []}; x.v += v; if (!x.src.includes(src)) x.src.push(src); m.set(k, x); };
   const take = (ei, si, v, src) => {
     const ef = D.effects[ei]; if (!ef || si < 0 || !ef.t || !ef.t.trim()) return;
@@ -496,6 +502,7 @@ function armyBuffs() {
     if (ef.us || ef.ur) add(sets, ei, si, v, src);
     if (!(ef.us || ef.ur) || facKeys.every(k => unitHit(ei, k, ri))) { add(all, ei, si, v, src); return; }
     for (const k of troops) if (unitHit(ei, k, ri)) { if (!per.has(k)) per.set(k, new Map()); add(per.get(k), ei, si, v, src); }
+    for (const k of facKeys) if (unitHit(ei, k, ri)) { if (!cand.has(k)) cand.set(k, new Map()); add(cand.get(k), ei, si, v, src); }
   };
   let fac = null;
   for (const e of armyEntries()) {
@@ -507,7 +514,7 @@ function armyBuffs() {
   }
   if (!fac) { const k = facLords(D.factions[A.fac]).find(hasTree), r = k && buildSources(A.fac, k, "", -1); if (r) fac = r.fac; }
   if (fac) for (const [ei, si, v] of fac[1]) take(ei, si, v, fac[0]);
-  return {all, per, troops, sets};
+  return {all, per, troops, sets, cand};
 }
 // unidades de la lista de reclutamiento que mejorarían: efectos con conjunto de unidades que no alcanzan a todas las de la facción
 function rosterBuffs(R) {
@@ -525,7 +532,7 @@ function buffLi(x) {
 }
 // mejoras de una unidad para su ficha (panel derecho)
 function unitBuffsHtml(k) {
-  const m = BUFFS && BUFFS.per.get(k); if (!m) return "";
+  const m = BUFFS && (BUFFS.per.get(k) || BUFFS.cand.get(k)); if (!m) return "";
   return `<div class="fxbox bbox"><h3>Mejoras en este ejército</h3><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></div>`;
 }
 // estadísticas de la unidad k con las mejoras del ejército: las que nombran a la unidad y las de todo el ejército que
@@ -533,7 +540,7 @@ function unitBuffsHtml(k) {
 function unitBuffStats(k) {
   const u = EJ.u[ukIdx[k]]; if (!BUFFS || !u) return null;
   const add = {}, pct = {}, why = {};
-  const list = [...(BUFFS.per.get(k) || new Map()).values()].map(x => [x]).concat([...BUFFS.all.values()].map(x => [x]));
+  const list = [...(BUFFS.per.get(k) || BUFFS.cand.get(k) || new Map()).values()].map(x => [x]).concat([...BUFFS.all.values()].map(x => [x]));
   for (const [x] of list) {
     // smt (stats_personaje.troop_stat_maps): estadística y modo de cada bonus del efecto; a qué unidades llega ya lo
     // ha decidido armyBuffs (las nombradas por su conjunto, o todas si va con los de todo el ejército)

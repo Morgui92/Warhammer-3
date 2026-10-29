@@ -209,6 +209,8 @@
       m => m.replace("Pasiva", "Passive").replace(/Recarga/, "Cooldown").replace(/Duración/, "Duration").replace(/Coste ([\d.]+) vientos/, "Cost $1 winds").replace(/(\d+) usos/, "$1 uses")],
     [/^No se han cargado (\d+) elementos que esta facción ya no puede reclutar\.$/, (m, n) => `${n} items were not loaded because this faction can no longer recruit them.`],
     [/^([\d.,]+) oro · ([\d.,]+)\/turno$/, (m, a, b) => `${a} gold · ${b}/turn`],
+    // coste rebajado en verde en la lista de reclutamiento: el texto queda partido alrededor de los números
+    [/^oro · ([\d.,]+)\/turno$/, (m, b) => `gold · ${b}/turn`], [/^([\d.,]+) oro ·$/, (m, a) => `${a} gold ·`], [/^oro ·$/, () => "gold ·"], [/^\/turno$/, () => "/turn"],
     [/^Añadir (.+)$/, (m, x) => "Add " + x], [/^Elegir (.+)$/, (m, x) => "Choose " + x], [/^Quitar (.+)$/, (m, x) => "Remove " + x],
     [/^(.+): el juego limita esta unidad a (\d+)$/, (m, u, n) => `${u}: the game limits this unit to ${n}`],
     [/^(.+) es un personaje legendario: solo puede haber uno\.$/, (m, x) => `${x} is a legendary character: only one allowed.`],
