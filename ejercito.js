@@ -338,22 +338,27 @@ function phTip(p) {
   return L.join("\n");
 }
 const phChip = i => { const p = EJ.ph && EJ.ph[i]; return p ? fxChip(SICON[p.ico], p.n.replace(/!$/, ""), phTip(p)) : ""; };
-function statsHtml(u, head) {
+// bf (opcional): estadísticas con las mejoras del ejército (unitBuffStats); las que cambian salen en verde (o rojo si
+// empeoran) con el total y, al pasar el ratón, de dónde viene cada mejora, como en la hoja del personaje
+function statsHtml(u, head, bf) {
   if (!u) return `<p class="empty">Sin estadísticas en la base de datos.</p>`;
-  const box = (k, l, v) => `<div><span>${ico(k)}${l}</span><b>${v}</b></div>`;
+  const N = (st, b) => bf && bf.v[st] != null ? bf.v[st] : b;
+  const cls = st => { if (!bf || bf.v[st] == null || bf.v[st] === bf.b[st]) return ""; return (bf.v[st] > bf.b[st]) !== (st === "rl") ? "up" : "down"; };
+  const box = (k, l, v, st = k) => { const c = cls(st), why = c && (bf.why[st] || []).join("\n");
+    return `<div><span>${ico(k)}${l}</span><b${c ? ` class="${c}"` : ""}${why ? ` title="${esc(why)}"` : ""}>${v}</b></div>`; };
   const dmg = (bk, b, ak, ap) => `<small class="brk" title="daño base + perforante">${ico(bk)}${b} ${ico(ak)}${ap} AP</small>`;
   const r = u.rng;
-  const res = Object.entries(u.res || {}).map(([k, v]) => `${RES_ES[k] || k} ${v}%`).join(", ");
+  const res = Object.entries({...(u.res || {}), ...(bf ? bf.res : {})}).map(([k, v]) => `${RES_ES[k] || k} ${v}%`).join(", ");
   const fxRow = (l, mag, fire, fx) => {
     const c = [mag && fxChip(SICON.mag, "Mágico", FX_MAG), fire && fxChip(SICON.fire, "Fuego", FX_FIRE), ...(fx || []).map(phChip)].filter(Boolean);
     return c.length ? `<div class="fxrow"><span class="lbl">${l}</span>${c.join("")}</div>` : "";
   };
   const fxh = fxRow("Cuerpo a cuerpo", u.mag, u.fire, u.fx) + (r ? fxRow("A distancia", r.mag, r.fire, u.rfx) : "");
   return `${head}
-    <div class="sgrid">${box("men", "Hombres", u.men)}${box("hp", "Vida", (u.hpa ? "~" : "") + u.hp.toLocaleString("es"))}${box("arm", "Armadura", u.arm)}${box("ld", "Liderazgo", u.ld)}
-      ${box("sp", u.fly ? "Vel. (vuelo)" : "Velocidad", u.sp)}${box("ma", "Ataque c/c", u.ma)}${box("md", "Defensa c/c", u.md)}${box("ch", "Carga", u.ch)}
-      ${box("ws", "Fuerza arma", `${u.ws} ${dmg("wb", u.wb, "ap", u.wap)}`)}${u.bvl ? box("bvl", "Bonus vs grandes", u.bvl) : ""}${u.bvi ? box("bvi", "Bonus vs inf.", u.bvi) : ""}${u.sh ? box("sh", "Escudo", u.sh + "%") : ""}
-      ${r ? box("rng", "Alcance", r.r) + box("rs", "Proyectil", `${r.s}${r.np > 1 ? " ×" + r.np : ""} ${dmg("rb", r.b, "rap", r.ap)}`) + box("am", "Munición", r.am) + (r.rl ? box("rl", "Recarga", r.rl + " s") : "") : ""}
+    <div class="sgrid">${box("men", "Hombres", u.men)}${box("hp", "Vida", (u.hpa ? "~" : "") + N("hp", u.hp).toLocaleString("es"))}${box("arm", "Armadura", N("arm", u.arm))}${box("ld", "Liderazgo", N("ld", u.ld))}
+      ${box("sp", u.fly ? "Vel. (vuelo)" : "Velocidad", N("sp", u.sp))}${box("ma", "Ataque c/c", N("ma", u.ma))}${box("md", "Defensa c/c", N("md", u.md))}${box("ch", "Carga", N("ch", u.ch))}
+      ${box("ws", "Fuerza arma", `${N("ws", u.ws)} ${dmg("wb", N("wb", u.wb), "ap", N("wap", u.wap))}`)}${u.bvl || N("bvl", 0) ? box("bvl", "Bonus vs grandes", N("bvl", u.bvl || 0)) : ""}${u.bvi || N("bvi", 0) ? box("bvi", "Bonus vs inf.", N("bvi", u.bvi || 0)) : ""}${u.sh ? box("sh", "Escudo", N("sh", u.sh) + "%") : ""}
+      ${r ? box("rng", "Alcance", N("rng", r.r)) + box("rs", "Proyectil", `${r.s}${r.np > 1 ? " ×" + r.np : ""} ${dmg("rb", N("rb", r.b), "rap", N("rap", r.ap))}`, "rpd") + box("am", "Munición", N("am", r.am)) + (r.rl ? box("rl", "Recarga", N("rl", r.rl) + " s") : "") : ""}
       ${u.cost ? box("cost", "Coste", u.cost) : ""}${u.up ? box("up", "Mantenim.", u.up) : ""}${u.turn ? box("turn", "Turnos", u.turn) : ""}</div>
     ${fxh ? `<div class="fx"><div class="lbl">Efectos de sus ataques <small>(pasa el ratón o toca para ver qué hacen)</small></div>${fxh}</div>` : ""}
     ${res ? `<div><span class="lbl">Resistencias</span> ${esc(res)}</div>` : ""}
@@ -367,15 +372,15 @@ function renderStats() {
   const el = $("#a-stats"), s = A.sel;
   if (!s) { el.innerHTML = `<h3>Ficha</h3><p class="empty">Toca una unidad, un señor o un héroe para ver sus estadísticas (tamaño Ultra, sin veteranía ni habilidades).</p>`; return; }
   if (s.t === "u") {
-    el.innerHTML = unitStatsBlock(s.k, D.factions[A.fac].k) + unitBuffsHtml(s.k);
+    el.innerHTML = unitStatsBlock(s.k, D.factions[A.fac].k, unitBuffStats(s.k)) + unitBuffsHtml(s.k);
   } else {
     el.innerHTML = charStatsBlock(s.k);
   }
 }
 
-function unitStatsBlock(k, fk) {
+function unitStatsBlock(k, fk, bf) {
   const u = EJ.u[ukIdx[k]], src = (facUnits(fk).find(x => x.u.k === k) || {src: []}).src;
-  return statsHtml({...u, lim: capText(u, fk)}, `<div class="shd">${unitCard(k, "big")}<div><h3>${esc(u.n)}</h3><div class="muted">${CASTE_ES[u.c] || u.c}</div>${u.rr ? `<span class="tag leg">Regimiento de Renombre</span>` : ""}${src.filter(x => x !== "Regimientos de Renombre").map(x => `<div class="muted">Se consigue con: ${esc(x)}</div>`).join("")}</div></div>`);
+  return statsHtml({...u, lim: capText(u, fk)}, `<div class="shd">${unitCard(k, "big")}<div><h3>${esc(u.n)}</h3><div class="muted">${CASTE_ES[u.c] || u.c}</div>${u.rr ? `<span class="tag leg">Regimiento de Renombre</span>` : ""}${src.filter(x => x !== "Regimientos de Renombre").map(x => `<div class="muted">Se consigue con: ${esc(x)}</div>`).join("")}</div></div>`, bf);
 }
 
 function charStatsBlock(k) {
@@ -511,6 +516,36 @@ function buffLi(x) {
 function unitBuffsHtml(k) {
   const m = BUFFS && BUFFS.per.get(k); if (!m) return "";
   return `<div class="fxbox bbox"><h3>Mejoras en este ejército</h3><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></div>`;
+}
+// estadísticas de la unidad k con las mejoras del ejército: las que nombran a la unidad y las de todo el ejército que
+// cambian una estadística (D.effects[i].smt, como «sm» en la hoja del personaje). null si ninguna cambia nada
+function unitBuffStats(k) {
+  const u = EJ.u[ukIdx[k]]; if (!BUFFS || !u) return null;
+  const add = {}, pct = {}, why = {};
+  const list = [...(BUFFS.per.get(k) || new Map()).values()].map(x => [x]).concat([...BUFFS.all.values()].map(x => [x]));
+  for (const [x] of list) {
+    // smt (stats_personaje.troop_stat_maps): estadística y modo de cada bonus del efecto; a qué unidades llega ya lo
+    // ha decidido armyBuffs (las nombradas por su conjunto, o todas si va con los de todo el ejército)
+    const e = D.effects[x.ei]; if (!e || !e.smt || !x.v) continue;
+    for (const [st, mode] of e.smt) {
+      if (mode === "on") continue;
+      const m = mode === "p" ? pct : add; m[st] = (m[st] || 0) + x.v;
+      (why[st] = why[st] || []).push(`${x.src.join(", ")}: ${x.v > 0 ? "+" : ""}${fmtNum(x.v)}${mode === "p" ? "%" : ""}`);
+    }
+  }
+  if (!Object.keys(why).length) return null;
+  const calc = (st, b) => b == null ? null : st === "rl" ? +(b * (1 - (pct[st] || 0) / 100)).toFixed(1) : Math.round((b + (add[st] || 0)) * (1 + (pct[st] || 0) / 100));
+  const b = {}, v = {};
+  for (const st of ["hp", "arm", "ld", "sp", "ma", "md", "ch", "wb", "wap", "bvl", "bvi", "sh"]) { b[st] = u[st] || 0; v[st] = calc(st, b[st]); }
+  b.ws = b.wb + b.wap; v.ws = v.wb + v.wap; why.ws = [...(why.wb || []), ...(why.wap || [])];
+  const r = u.rng;
+  if (r) {
+    for (const [st, x] of [["rng", r.r], ["rb", r.b], ["rap", r.ap], ["am", r.am], ["rl", r.rl]]) if (x != null) { b[st] = x; v[st] = calc(st, x); }
+    b.rpd = b.rb + b.rap; v.rpd = v.rb + v.rap; why.rpd = [...(why.rb || []), ...(why.rap || [])];
+  }
+  const res = {};
+  for (const rk of ["salvaguarda", "fisico", "proyectiles", "magia", "fuego"]) if (add[rk]) res[rk] = Math.min(90, ((u.res || {})[rk] || 0) + add[rk]);
+  return {b, v, why, res};
 }
 function renderBuffs() {
   const el = $("#a-buffs"); if (!el) return;
