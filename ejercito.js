@@ -154,11 +154,11 @@ function loadArmies() {
   if (l.some(b => !b.id)) { l.forEach(b => { if (!b.id) b.id = newSaveId(); }); storeArmies(l); }  // guardados de antes, sin id
   return l;
 }
-function storeArmies(l) { try { localStorage.setItem(LS_ARMY, JSON.stringify(l)); } catch (e) {} }
+function storeArmies(l) { try { localStorage.setItem(LS_ARMY, JSON.stringify(l)); } catch (e) {} if (window.WH3SYNC) WH3SYNC.changed(); }
 function saveArmy(asNew) {
   const t = armyToken(), f = D.factions[A.fac], l = loadArmies();
   const name = (A.name || "").trim() || `${A.lord ? D.agents[A.lord].n : "Sin señor"} · ${used()} unidades`;
-  const b = {name, fac: f.n, t, when: new Date().toISOString().slice(0, 10)};
+  const b = {name, fac: f.n, t, when: new Date().toISOString().slice(0, 10), u: Date.now()};
   const cur = l.find(x => x.id === A.saveId);
   if (asNew && cur && name === cur.name) { A.name = `${name} (copia)`; return saveArmy(true); }  // la copia no se llama igual que el original
   const i = asNew ? -1 : l.indexOf(cur);
@@ -656,7 +656,7 @@ document.addEventListener("click", e => {
   }
   if ((b = g("[data-tree]"))) { openTree(A.fac, b.dataset.tree, null, null); return; }
   if ((b = g("[data-aopen]"))) { openSaved(+b.dataset.aopen); return; }
-  if ((b = g("[data-adel]"))) { const l = loadArmies(), [d] = l.splice(+b.dataset.adel, 1); storeArmies(l); if (d && d.id === A.saveId) A.saveId = null; renderSaveButtons(); renderSavedArmies(); return; }
+  if ((b = g("[data-adel]"))) { const l = loadArmies(), [d] = l.splice(+b.dataset.adel, 1); if (d && window.WH3SYNC) WH3SYNC.removed("army", d.id); storeArmies(l); if (d && d.id === A.saveId) A.saveId = null; renderSaveButtons(); renderSavedArmies(); return; }
   if ((b = g("[data-sid]"))) { const id = b.dataset.sid; A.sel = armyEntries().find(x => x.id === id) || null; renderSlots(); renderStats(); return; }
   if ((b = g("[data-su]")) || (b = g("[data-sa]"))) {
     const add = b.dataset.su ? {t: "u", k: b.dataset.su} : {t: A.tab === "lords" ? "L" : "h", k: b.dataset.sa};
