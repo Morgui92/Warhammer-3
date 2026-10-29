@@ -239,6 +239,7 @@ svg.glinks{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
 .ulist{display:flex;flex-wrap:wrap;gap:6px}
 .uchip{font-size:13px;border:1px solid var(--line);background:#0d0b09;border-radius:2px;padding:3px 7px}
 .uchip small{color:var(--muted)}
+.recr{margin-top:8px}.fx.why{margin:8px 0 4px;font-size:13px}.recr summary{cursor:pointer;font-size:13px;margin-bottom:6px}
 .empty{color:var(--muted);font-style:italic;font-size:14px}
 
 /* v2.11.4: la hoja nunca se ensancha por dentro (lo que no cabe parte de línea en vez de quedar cortado) */
@@ -451,7 +452,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.12.3";
+const SIM_VERSION = "2.12.4";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -1448,12 +1449,22 @@ function renderDetail(hj) {
   $("#d-rem").onclick = () => { S.sel = j; remove(j); };
 }
 function renderSummary() {
-  const t = S.tree, agg = new Map(), units = new Map(), uix = new Map(), abil = [];
-  const addUnits = (ei, label) => {
-    const e = D.effects[ei]; if (!e || !(e.us || e.ur)) return;
-    const us = unitsFor(ei, t.ri); for (const u of us) { if (!units.has(u)) units.set(u, new Set()); units.get(u).add(label); if (!uix.has(u)) uix.set(u, us.ix.get(u)); }
+  const t = S.tree, agg = new Map(), units = new Map(), recr = new Map(), uix = new Map(), abil = [], why = new Map();
+  // mismas reglas que el ejército (ARMY_SC de ejercito.js): solo cuentan los efectos sobre el ejército propio. Los de
+  // provincia o facción que nombran unidades (duración del reclutamiento, rango al reclutar, límite de unidades) van
+  // aparte como ventajas de reclutamiento; los del propio personaje y los de enemigos o aliados no se listan
+  const addUnits = (ei, si, v, label) => {
+    const e = D.effects[ei], sk = D.scope_keys[si] || ""; if (!e || !(e.us || e.ur) || NOT_ARMY.test(sk)) return;
+    const m = ARMY_SC.test(sk) ? units : /^(character_to_character|force_to_character|general_to_character|agent_to_parent_army_general)/.test(sk) ? null : recr;
+    if (!m) return;
+    // por qué: el texto del efecto y de dónde viene, en el título de cada unidad y en la lista bajo las unidades
+    const f = fmtEffect(ei, si, v), txt = label + (f ? ": " + f.t : "");
+    const us = unitsFor(ei, t.ri); for (const u of us) { if (!m.has(u)) m.set(u, new Set()); m.get(u).add(txt); if (!uix.has(u)) uix.set(u, us.ix.get(u)); }
+    if (!us.length) return;
+    const wk = (m === units ? "u" : "r") + ei + ":" + si + ":" + label, w = why.get(wk) || {m, ei, si, v: 0, label, n: us.length};
+    w.v += v; why.set(wk, w);
   };
-  for (const [label, effs] of fixedSources()) for (const [ei] of effs) addUnits(ei, label);
+  for (const [label, effs] of fixedSources()) for (const [ei, si, v] of effs) addUnits(ei, si, v, label);
   t.vis.forEach((n, j) => {
     const l = S.lv[j] || 0; if (!l) return;
     const s = SK(n.s);
@@ -1461,15 +1472,19 @@ function renderSummary() {
       if (!D.effects[ei]) continue;
       const k = ei + ":" + si; agg.set(k, [ei, si, (agg.get(k)?.[2] || 0) + v]);
       const e = D.effects[ei];
-      addUnits(ei, s.n);
+      addUnits(ei, si, v, s.n);
       for (const ai of e.ab || []) if (!abil.includes(ai)) abil.push(ai);
     }
   });
   const fx = [...agg.values()].map(x => fxLi(...x)).join("");
-  const ul = [...units.entries()].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]));
+  const sortU = m => [...m.entries()].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]));
+  const ul = sortU(units), rl = sortU(recr);
+  const whyHtml = m => { const ws = [...why.values()].filter(w => w.m === m); return ws.length ? `<ul class="fx why">${ws.map(w => { const f = fmtEffect(w.ei, w.si, w.v); return f ? `<li><span class="${f.good ? "pos" : "neg"}">${esc(f.t)}</span> <span class="scope">${esc(w.label)} · ${w.n} ${w.n === 1 ? "unidad" : "unidades"}</span></li>` : ""; }).join("")}</ul>` : ""; };
+  const chips = l => `<div class="ulist">${l.map(([u, ss]) => `<span class="uchip" title="${esc([...ss].join(", "))}">${window.unitThumb ? window.unitThumb(uix.get(u)) : ""}${esc(u)} <small>×${ss.size}</small></span>`).join("")}</div>`;
   $("#summary").innerHTML = `
     <div><h3>Efectos de la build</h3>${fx ? `<ul class="fx">${fx}</ul>` : `<p class="empty">Aún no hay puntos invertidos.</p>`}</div>
-    <div><h3>Unidades potenciadas</h3>${ul.length ? `<div class="ulist">${ul.map(([u, ss]) => `<span class="uchip" title="${esc([...ss].join(", "))}">${window.unitThumb ? window.unitThumb(uix.get(u)) : ""}${esc(u)} <small>×${ss.size}</small></span>`).join("")}</div><p class="muted" style="font-size:12px">×N = número de habilidades y efectos que la mejoran (pasa el ratón para verlos).</p>` : `<p class="empty">Ni las habilidades elegidas ni los efectos del señor o de la facción mejoran unidades concretas.</p>`}</div>
+    <div><h3>Unidades potenciadas</h3>${ul.length ? `${chips(ul)}${whyHtml(units)}<p class="muted" style="font-size:12px">×N = número de habilidades y efectos que la mejoran en el ejército (pasa el ratón para verlos).</p>` : `<p class="empty">Ni las habilidades elegidas ni los efectos del señor o de la facción mejoran unidades concretas del ejército.</p>`}
+    ${rl.length ? `<details class="recr"${ul.length ? "" : " open"}><summary class="muted">Ventajas de reclutamiento en campaña (${rl.length} unidades)</summary>${whyHtml(recr)}${chips(rl)}<p class="muted" style="font-size:12px">Duración del reclutamiento, rango al reclutar o límite de unidades: no cambian a la unidad en batalla.</p></details>` : ""}</div>
     ${abil.length ? `<div><h3>Habilidades activas y pasivas</h3>${abil.map(abilityHtml).join("")}</div>` : ""}`;
 }
 
