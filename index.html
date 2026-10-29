@@ -452,7 +452,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.12.4";
+const SIM_VERSION = "2.12.5";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -646,7 +646,14 @@ function treeFor(agentKey, fi) {
     if (rn.some(n => n.req_all.length || n.req_sub.length || n.children.length)) continue;
     rn.sort((a, b) => a.x - b.x).forEach((n, k) => n.x = k);
   }
-  return {a, f, fi, ri, vis, hidden, traits, rows, ncols: cols.length};
+  // filas (o grupos de filas unidas por flechas) que en los datos empiezan muy a la derecha, como los tres caminos
+  // de la Doncella (columnas 1, 5 y 9) o la fila de batalla de Wulfrik: se arriman a la izquierda sin cambiar su forma
+  const grp = new Map(rows.map(r => [r, r])), top = r => grp.get(r) === r ? r : top(grp.get(r));
+  vis.forEach(n => n.children.forEach(c => { const a = top(n.row), b = top(vis[c].row); if (a !== b) grp.set(a, b); }));
+  const minX = new Map();
+  vis.forEach(n => { const g = top(n.row); minX.set(g, Math.min(minX.get(g) ?? 1e9, n.x)); });
+  vis.forEach(n => n.x -= minX.get(top(n.row)));
+  return {a, f, fi, ri, vis, hidden, traits, rows, ncols: Math.max(0, ...vis.map(n => n.x)) + 1};
 }
 function catFor(row, agentKey) {
   const own = D.categories.filter(c => c.ag === agentKey && c.min <= row && row <= c.max);
