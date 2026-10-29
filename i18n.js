@@ -154,6 +154,7 @@
   // patrones con números o nombres dentro; se prueban en orden si la frase no está entera en W
   const R = [
     [/^\((\d+) de (\d+)\)$/, "($1 of $2)"], [/^(.+) · Nivel (\d+) · (\d+) puntos$/, "$1 · Rank $2 · $3 points"], [/^Nivel (\d+) · (\d+) puntos$/, "Rank $1 · $2 points"],
+    [/^La mejorarían (\d+) efectos? de la facción, el señor y los héroes$/, (m, n) => `${n} ${n === "1" ? "effect" : "effects"} from the faction, lord and heroes would buff it`],
     [/^Sin mejoras concretas: /, () => "No specific buffs: "], [/^Mejorada por (\d+) efectos? de las builds$/, (m, n) => `Buffed by ${n} build ${n === "1" ? "effect" : "effects"}`],
     [/^Build de (.+)$/, "$1's build"],
     [/^Nivel (\d+)$/, "Rank $1"], [/^\(nivel (\d+)\)$/, "(rank $1)"],

@@ -237,7 +237,7 @@ function renderArmyAll() {
   // «Nuevo ejército» empieza uno en blanco que se guardará aparte; «Vaciar» solo quita las unidades del que estás editando
   $("#a-new").onclick = () => { A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.saveId = null; A.builds = {}; $("#a-name").value = ""; armyChanged(); renderSaveButtons(); renderSavedArmies(); armyMsg("Ejército nuevo: al guardarlo se añadirá a «Mis ejércitos»."); };
   $("#a-clear").onclick = () => { A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.builds = {}; armyChanged(); };
-  renderRoster(); renderArmy(); renderSaveButtons(); renderSavedArmies();
+  renderArmy(); renderRoster(); renderSaveButtons(); renderSavedArmies();  // renderArmy calcula las mejoras que resalta la lista
 }
 function armyChanged() { renderArmy(); renderRoster(); syncHash(); }
 function renderArmy() { renderBuffs(); renderSlots(); renderTotals(); renderField(); renderStats(); }
@@ -257,7 +257,8 @@ function renderRoster() {
     $("#a-list").innerHTML = groups.map(([c, xs]) => `<h4>${CASTE_ES[c]} <span class="muted">(${xs.length})</span></h4>` + xs.map(({u, src}) => {
       const tags = (u.rr ? `<span class="tag leg">Renombre</span> ` : "") + src.filter(s => s !== "Regimientos de Renombre").map(s => `<span class="tag" title="Formas de conseguirla">${esc(s)}</span> `).join("");
       const can = canAddUnit(u);
-      return `<div class="rrow${A.sel && A.sel.k === u.k ? " on" : ""}" data-su="${u.k}">${unitCard(u.k, "mini")}<span class="t"><b>${esc(u.n)}</b><br><span class="muted">${u.cost} oro · ${u.up}/turno</span> ${tags}</span>
+      const nb = ROSTER_BUFFED.get(u.k) || 0;
+      return `<div class="rrow${A.sel && A.sel.k === u.k ? " on" : ""}${nb ? " buffed" : ""}" data-su="${u.k}">${unitCard(u.k, "mini")}<span class="t"><b>${esc(u.n)}</b>${nb ? ` <span class="rbf" title="La mejorarían ${nb} ${nb === 1 ? "efecto" : "efectos"} de la facción, el señor y los héroes">▲${nb}</span>` : ""}<br><span class="muted">${u.cost} oro · ${u.up}/turno</span> ${tags}</span>
         <button class="add" data-au="${u.k}" ${can ? "" : "disabled"} aria-label="Añadir ${esc(u.n)}" title="${esc(can ? "Añadir" : whyNot({t: "u", k: u.k}))}">+</button></div>`;
     }).join("")).join("") + (sin.length ? `<details class="sin"><summary class="muted">Unidades de la raza que no he podido ubicar en ninguna facción (${sin.length})</summary><ul>${sin.map(s => `<li>${esc(s)}</li>`).join("")}</ul></details>` : "")
       || `<p class="empty">Nada coincide.</p>`;
@@ -449,18 +450,20 @@ function savedFor(k) {
 }
 const sameBuild = (a, b) => a && b && a.lv.replace(/0+$/, "") === b.lv.replace(/0+$/, "") && (a.t ?? -1) === (b.t ?? -1);
 function buildName(k, b) { const s = savedFor(k).find(x => sameBuild(x.c, b)); return s ? s.b.name : "Build del enlace"; }
-let BUFFED = new Map(), BUFFS = null;  // unidad -> nº de mejoras (resalta cartas y fichas); BUFFS: último cálculo
+let BUFFED = new Map(), BUFFS = null, ROSTER_BUFFED = new Map();  // ROSTER_BUFFED: igual para la lista de reclutamiento
+  // unidad -> nº de mejoras (resalta cartas y fichas); BUFFS: último cálculo
 // Mejoras al ejército: efectos de facción (una vez), y por cada señor o héroe sus efectos innatos y rasgo (siempre) más
 // los de su build si tiene. Sin build se usa el árbol vacío, que solo da los innatos.
 function armyBuffs() {
   const ri = raceIdx[D.factions[A.fac].sc];
   const troops = [...new Set(A.items.filter(it => it.t === "u").map(it => it.k))];
-  const all = new Map(), per = new Map();
+  const all = new Map(), per = new Map(), sets = new Map();
   const add = (m, ei, si, v, src) => { const k = ei + ":" + si, x = m.get(k) || {ei, si, v: 0, src: []}; x.v += v; if (!x.src.includes(src)) x.src.push(src); m.set(k, x); };
   const take = (ei, si, v, src) => {
     const ef = D.effects[ei]; if (!ef || si < 0 || !ef.t || !ef.t.trim()) return;
     const sk = D.scope_keys[si]; if (!ARMY_SC.test(sk) || NOT_ARMY.test(sk)) return;
     // si alcanza a todas las unidades del ejército se lista con los de todo el ejército (no hay nada que resaltar)
+    if (ef.us || ef.ur) add(sets, ei, si, v, src);
     const hit = ef.us || ef.ur ? troops.filter(k => unitHit(ei, k, ri)) : null;
     if (hit && hit.length < troops.length) for (const k of hit) { if (!per.has(k)) per.set(k, new Map()); add(per.get(k), ei, si, v, src); }
     else if (!hit || hit.length) add(all, ei, si, v, src);
@@ -475,7 +478,16 @@ function armyBuffs() {
   }
   if (!fac) { const k = facLords(D.factions[A.fac]).find(hasTree), r = k && buildSources(A.fac, k, "", -1); if (r) fac = r.fac; }
   if (fac) for (const [ei, si, v] of fac[1]) take(ei, si, v, fac[0]);
-  return {all, per, troops};
+  return {all, per, troops, sets};
+}
+// unidades de la lista de reclutamiento que mejorarían: efectos con conjunto de unidades que no alcanzan a todas las de la facción
+function rosterBuffs(R) {
+  const ri = raceIdx[D.factions[A.fac].sc], keys = facUnits(D.factions[A.fac].k).map(x => x.u.k), out = new Map();
+  for (const x of R.sets.values()) {
+    const hit = keys.filter(k => unitHit(x.ei, k, ri));
+    if (hit.length < keys.length) for (const k of hit) out.set(k, (out.get(k) || 0) + 1);
+  }
+  return out;
 }
 function buffLi(x) {
   const f = fmtEffect(x.ei, x.si, x.v); if (!f) return "";
@@ -488,7 +500,7 @@ function unitBuffsHtml(k) {
 }
 function renderBuffs() {
   const el = $("#a-buffs"); if (!el) return;
-  const R = BUFFS = armyBuffs(); BUFFED = new Map([...R.per].map(([k, m]) => [k, m.size]));
+  const R = BUFFS = armyBuffs(); BUFFED = new Map([...R.per].map(([k, m]) => [k, m.size])); ROSTER_BUFFED = rosterBuffs(R);
   const chars = armyEntries().filter(e => e.t === "h");
   const rows = chars.map(e => {
     const a = D.agents[e.k], b = A.builds[e.id];
@@ -680,6 +692,10 @@ document.head.insertAdjacentHTML("beforeend", `<style>
 .slot .bf{position:absolute;top:20px;left:3px;z-index:2;background:#1d3b1c;color:#bfe7a6;border:1px solid #6fae5a;border-radius:2px;font:600 11px/1 var(--body,inherit);padding:2px 4px;pointer-events:auto}
 .slot .bf.b{background:#3a2c14;color:var(--gold2);border-color:var(--gold)}
 #a-slots .slot.buffed,#a-slots .slot.buffed:hover{border-color:#c9e39a;box-shadow:0 0 14px 2px #b6e27a80,inset 0 0 12px #b6e27a40;animation:bglow 3s ease-in-out infinite}
+.rrow.buffed{border-color:#c9e39a;box-shadow:0 0 10px 1px #b6e27a66,inset 0 0 8px #b6e27a26;animation:bglow2 3s ease-in-out infinite}
+@keyframes bglow2{50%{box-shadow:0 0 14px 2px #b6e27a88,inset 0 0 10px #b6e27a40}}
+.rbf{color:#c9e39a;font-weight:600;font-size:11px}
+@media (prefers-reduced-motion:reduce){.rrow.buffed{animation:none}}
 .tok.buffed{border-color:#c9e39a;box-shadow:0 0 10px 1px #b6e27a88}
 @keyframes bglow{50%{box-shadow:0 0 20px 4px #b6e27a99,inset 0 0 16px #b6e27a55}}
 @media (prefers-reduced-motion:reduce){#a-slots .slot.buffed{animation:none}}
