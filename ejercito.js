@@ -750,8 +750,9 @@ document.addEventListener("click", e => {
 
 // ---------- estilos ----------
 document.head.insertAdjacentHTML("beforeend", `<style>
-.ssel{display:flex;gap:6px;align-items:center}
-.ssel select{flex:1;min-width:0;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:2px;font:inherit;font-size:13px}
+.saved:has(.ssel){grid-template-columns:minmax(0,1fr);overflow:visible;max-height:none}
+.ssel{display:flex;gap:6px;align-items:center;min-width:0;max-width:100%}
+.ssel select{flex:1 1 0;width:0;min-width:0;text-overflow:ellipsis;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:2px;font:inherit;font-size:13px}
 .ssel .x{background:none;border:1px solid var(--line);color:var(--muted);border-radius:2px;cursor:pointer;padding:5px 8px;font-size:12px;white-space:nowrap}
 .ssel .x:disabled{opacity:.35;cursor:default}.ssel .x.armed{color:#f3c5b5;border-color:#a0483c;background:#3a1512}
 #a-slots .slot.over{outline:2px dashed var(--gold2);outline-offset:-2px}
