@@ -352,7 +352,7 @@ function renderStats() {
   const el = $("#a-stats"), s = A.sel;
   if (!s) { el.innerHTML = `<h3>Ficha</h3><p class="empty">Toca una unidad, un señor o un héroe para ver sus estadísticas (tamaño Ultra, sin veteranía ni habilidades).</p>`; return; }
   if (s.t === "u") {
-    el.innerHTML = unitStatsBlock(s.k, D.factions[A.fac].k);
+    el.innerHTML = unitStatsBlock(s.k, D.factions[A.fac].k) + unitBuffsHtml(s.k);
   } else {
     el.innerHTML = charStatsBlock(s.k);
   }
@@ -449,60 +449,64 @@ function savedFor(k) {
 }
 const sameBuild = (a, b) => a && b && a.lv.replace(/0+$/, "") === b.lv.replace(/0+$/, "") && (a.t ?? -1) === (b.t ?? -1);
 function buildName(k, b) { const s = savedFor(k).find(x => sameBuild(x.c, b)); return s ? s.b.name : "Build del enlace"; }
-let BUFFED = new Map();  // unidad -> nº de efectos de las builds que la mejoran (resalta cartas y fichas)
+let BUFFED = new Map(), BUFFS = null;  // unidad -> nº de mejoras (resalta cartas y fichas); BUFFS: último cálculo
+// Mejoras al ejército: efectos de facción (una vez), y por cada señor o héroe sus efectos innatos y rasgo (siempre) más
+// los de su build si tiene. Sin build se usa el árbol vacío, que solo da los innatos.
 function armyBuffs() {
   const ri = raceIdx[D.factions[A.fac].sc];
   const troops = [...new Set(A.items.filter(it => it.t === "u").map(it => it.k))];
   const all = new Map(), per = new Map();
   const add = (m, ei, si, v, src) => { const k = ei + ":" + si, x = m.get(k) || {ei, si, v: 0, src: []}; x.v += v; if (!x.src.includes(src)) x.src.push(src); m.set(k, x); };
+  const take = (ei, si, v, src) => {
+    const ef = D.effects[ei]; if (!ef || si < 0 || !ef.t || !ef.t.trim()) return;
+    const sk = D.scope_keys[si]; if (!ARMY_SC.test(sk) || NOT_ARMY.test(sk)) return;
+    // si alcanza a todas las unidades del ejército se lista con los de todo el ejército (no hay nada que resaltar)
+    const hit = ef.us || ef.ur ? troops.filter(k => unitHit(ei, k, ri)) : null;
+    if (hit && hit.length < troops.length) for (const k of hit) { if (!per.has(k)) per.set(k, new Map()); add(per.get(k), ei, si, v, src); }
+    else if (!hit || hit.length) add(all, ei, si, v, src);
+  };
+  let fac = null;
   for (const e of armyEntries()) {
-    const b = A.builds[e.id]; if (e.t !== "h" || !b) continue;
-    const r = buildSources(A.fac, e.k, b.lv, b.t); if (!r) continue;
+    if (e.t !== "h" || !hasTree(e.k)) continue;
+    const b = A.builds[e.id], r = buildSources(A.fac, e.k, b ? b.lv : "", b ? b.t : -1); if (!r) continue;
+    if (!fac) fac = r.fac;
     const who = D.agents[e.k].n;
-    for (const [label, effs] of r.src) for (const [ei, si, v] of effs) {
-      const ef = D.effects[ei]; if (!ef || si < 0 || !ef.t || !ef.t.trim()) continue;
-      const sk = D.scope_keys[si]; if (!ARMY_SC.test(sk) || NOT_ARMY.test(sk)) continue;
-      const src = `${label} (${who})`;
-      // si alcanza a todas las unidades del ejército se lista con los de todo el ejército (no hay nada que resaltar)
-      const hit = ef.us || ef.ur ? troops.filter(k => unitHit(ei, k, ri)) : null;
-      if (hit && hit.length < troops.length) for (const k of hit) { if (!per.has(k)) per.set(k, new Map()); add(per.get(k), ei, si, v, src); }
-      else if (!hit || hit.length) add(all, ei, si, v, src);
-    }
+    for (const [label, effs] of r.src) for (const [ei, si, v] of effs) take(ei, si, v, `${label} (${who})`);
   }
+  if (!fac) { const k = facLords(D.factions[A.fac]).find(hasTree), r = k && buildSources(A.fac, k, "", -1); if (r) fac = r.fac; }
+  if (fac) for (const [ei, si, v] of fac[1]) take(ei, si, v, fac[0]);
   return {all, per, troops};
 }
 function buffLi(x) {
   const f = fmtEffect(x.ei, x.si, x.v); if (!f) return "";
-  return `<li><span class="${f.good ? "pos" : "neg"}">${esc(f.t)}</span><div class="bsrc">${esc(x.src.join(" · "))}</div></li>`;
+  return `<li><span class="${f.good ? "pos" : "neg"}">${esc(f.t)}</span> <span class="bsrc">${esc(x.src.join(" · "))}</span></li>`;
+}
+// mejoras de una unidad para su ficha (panel derecho)
+function unitBuffsHtml(k) {
+  const m = BUFFS && BUFFS.per.get(k); if (!m) return "";
+  return `<div class="fxbox bbox"><h3>Mejoras en este ejército</h3><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></div>`;
 }
 function renderBuffs() {
   const el = $("#a-buffs"); if (!el) return;
-  const R = armyBuffs(); BUFFED = new Map([...R.per].map(([k, m]) => [k, m.size]));
+  const R = BUFFS = armyBuffs(); BUFFED = new Map([...R.per].map(([k, m]) => [k, m.size]));
   const chars = armyEntries().filter(e => e.t === "h");
   const rows = chars.map(e => {
-    const a = D.agents[e.k], b = A.builds[e.id], role = e.id === "L" ? "Señor" : "Héroe";
-    if (!hasTree(e.k)) return `<div class="bchar">${agentCrest(e.k)}<div class="t"><b>${esc(a.n)}</b> · <span class="muted">${role}</span><br><span class="muted">El juego no le da árbol de habilidades.</span></div></div>`;
+    const a = D.agents[e.k], b = A.builds[e.id];
+    if (!hasTree(e.k)) return `<div class="bchar" title="${esc(a.n)}">${agentCrest(e.k)}<b>${esc(a.n)}</b><span class="muted">Sin árbol</span></div>`;
     const sv = savedFor(e.k), cur = b ? sv.find(x => sameBuild(x.c, b)) : null, r = b && buildSources(A.fac, e.k, b.lv, b.t);
     const opts = `<option value="">Sin build</option>` + sv.map(x => `<option value="${x.i}"${cur && cur.i === x.i ? " selected" : ""}>${esc(x.b.name)}</option>`).join("")
       + (b && !cur ? `<option value="cur" selected>Build del enlace</option>` : "");
-    return `<div class="bchar${b ? " on" : ""}">${agentCrest(e.k)}<div class="t"><b>${esc(a.n)}</b> · <span class="muted">${role}</span>
-      <div class="brow"><select data-bsel="${e.id}" aria-label="Build de ${esc(a.n)}">${opts}</select><button class="btn ghost sm" data-bedit="${e.id}">${b ? "Editar en el árbol" : "Crear en el árbol"}</button></div>
-      ${r ? `<div class="muted">Nivel ${r.rank} · ${r.spent} puntos</div>` : sv.length ? "" : `<div class="muted">Aún no tienes builds guardadas de este personaje.</div>`}</div></div>`;
+    return `<div class="bchar${b ? " on" : ""}" title="${esc(a.n)}${r ? ` · Nivel ${r.rank} · ${r.spent} puntos` : ""}">${agentCrest(e.k)}<b>${esc(a.n)}</b><select data-bsel="${e.id}" aria-label="Build de ${esc(a.n)}">${opts}</select><button class="bed" data-bedit="${e.id}" title="${b ? "Editar en el árbol" : "Crear en el árbol"}" aria-label="${b ? "Editar en el árbol" : "Crear en el árbol"}">✎</button></div>`;
   }).join("");
-  const nb = chars.filter(e => A.builds[e.id]).length;
-  const allFx = [...R.all.values()].map(buffLi).join("");
-  const units = R.troops.filter(k => R.per.has(k)), rest = R.troops.filter(k => !R.per.has(k));
-  el.innerHTML = `<div class="fhd"><h3>Builds de habilidades</h3><span class="muted">Asigna a tu señor y a tus héroes una build guardada en el árbol de habilidades («Guardar» en su ficha) o créala desde aquí. Se suman solo los efectos que el juego aplica a su ejército; los del propio personaje están en su hoja del árbol.</span></div>
-    ${rows ? `<div class="bchars">${rows}</div>` : `<p class="empty">Elige un señor o añade héroes para asignarles una build.</p>`}
-    ${nb ? `<div class="bres">
-      <div><h4>Todo el ejército</h4>${allFx ? `<ul class="fx">${allFx}</ul>` : `<p class="empty">Ningún efecto de las builds afecta a todo el ejército.</p>`}</div>
-      <div><h4>Unidades mejoradas <span class="muted">(${units.length} de ${R.troops.length})</span></h4>${units.length ? `<p class="muted" style="font-size:12px;margin:0 0 6px">Resaltadas en verde en el ejército y en el campo; ▲N = efectos que la mejoran. Toca una para ver los efectos.</p>` : ""}${units.length ? `<div class="bunits">${units.map(k => {
-        const u = EJ.u[ukIdx[k]], m = R.per.get(k);
-        const sk = [...new Set([...m.values()].flatMap(x => x.src))];
-        return `<details class="bunit" data-bu="${k}"><summary>${unitCard(k, "mini")}<div class="t"><b>${esc(u.n)}</b> <small class="muted">×${m.size}</small><div class="bsrc">${esc(sk.join(" · "))}</div></div></summary><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></details>`;
-      }).join("")}</div>` : `<p class="empty">${R.troops.length ? "Ninguna habilidad de las builds nombra a las unidades de este ejército." : "Añade unidades al ejército para ver cuáles mejoran."}</p>`}
-      ${rest.length && units.length ? `<p class="muted" style="font-size:12px">Sin mejoras concretas: ${rest.map(k => esc(EJ.u[ukIdx[k]].n)).join(", ")}.</p>` : ""}</div>
-    </div>` : ""}`;
+  const units = R.troops.filter(k => R.per.has(k));
+  el.innerHTML = `<div class="fhd"><h3>Builds y mejoras</h3><span class="muted" title="Se suman los efectos que el juego aplica al ejército: facción, efectos innatos del señor y de los héroes, y sus builds (guárdalas en el árbol o créalas con ✎). Los del propio personaje están en su hoja del árbol.">Facción, innatos y builds · ⓘ</span></div>
+    ${rows ? `<div class="bchars">${rows}</div>` : ""}
+    <div class="bres">
+      <details class="ball"><summary>Todo el ejército <span class="muted">· ${R.all.size}</span></summary>${R.all.size ? `<ul class="fx">${[...R.all.values()].map(buffLi).join("")}</ul>` : `<p class="empty">Ningún efecto alcanza a todo el ejército.</p>`}</details>
+      ${units.length ? units.map(k => { const m = R.per.get(k);
+        return `<details class="bunit" data-bu="${k}"><summary><b>${esc(EJ.u[ukIdx[k]].n)}</b> <span class="bn">▲${m.size}</span></summary><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></details>`; }).join("")
+      : `<span class="muted bnone">${R.troops.length ? "Ninguna unidad del ejército recibe mejoras concretas." : "Añade unidades para ver cuáles mejoran."}</span>`}
+    </div>`;
 }
 document.addEventListener("change", e => {
   const s = e.target.closest && e.target.closest("[data-bsel]"); if (!s) return;
@@ -675,24 +679,28 @@ document.head.insertAdjacentHTML("beforeend", `<style>
 #a-slots .slot.over{outline:2px dashed var(--gold2);outline-offset:-2px}
 .slot .bf{position:absolute;top:20px;left:3px;z-index:2;background:#1d3b1c;color:#bfe7a6;border:1px solid #6fae5a;border-radius:2px;font:600 11px/1 var(--body,inherit);padding:2px 4px;pointer-events:auto}
 .slot .bf.b{background:#3a2c14;color:var(--gold2);border-color:var(--gold)}
-#a-slots .slot.buffed{border-color:#6fae5a;box-shadow:0 0 8px -1px #6fae5a99}
-.tok.buffed{box-shadow:0 0 0 2px #6fae5a,0 0 10px #6fae5a99}
-.bchars{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin:8px 0}
-.bchar{display:flex;gap:8px;align-items:flex-start;padding:6px;border:1px solid var(--line);border-radius:2px;background:#0d0b0966;font-size:13px}
+#a-slots .slot.buffed,#a-slots .slot.buffed:hover{border-color:#c9e39a;box-shadow:0 0 14px 2px #b6e27a80,inset 0 0 12px #b6e27a40;animation:bglow 3s ease-in-out infinite}
+.tok.buffed{border-color:#c9e39a;box-shadow:0 0 10px 1px #b6e27a88}
+@keyframes bglow{50%{box-shadow:0 0 20px 4px #b6e27a99,inset 0 0 16px #b6e27a55}}
+@media (prefers-reduced-motion:reduce){#a-slots .slot.buffed{animation:none}}
+#a-buffs{padding:8px 10px}#a-buffs .fhd{margin:0}#a-buffs .fhd h3{font-size:16px}
+.bchars{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.bchar{display:flex;gap:6px;align-items:center;padding:3px 5px;border:1px solid var(--line);border-radius:2px;background:#0d0b0966;font-size:12px;max-width:100%}
 .bchar.on{border-color:var(--gold)}
-.bchar .crest{width:34px;height:34px;flex:none}.bchar img.crest.face{width:30px;height:65px}
-.bchar .t{min-width:0;flex:1}
-.brow{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
-.brow select{flex:1;min-width:0;max-width:100%;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:5px 6px;border-radius:2px;font:inherit}
-.btn.sm{padding:4px 8px;font-size:12px}
-.bres{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:14px}
-.bres h4{margin:6px 0;font:15px var(--display);color:var(--gold)}
-.bunits{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
-.bunit{padding:6px;border:1px solid #6fae5a66;border-radius:2px;background:#0d0b0966;font-size:13px;align-self:start}
-.bunit summary{display:flex;gap:8px;align-items:flex-start;cursor:pointer;list-style:none}.bunit summary::-webkit-details-marker{display:none}
-.bunit[open]{border-color:#6fae5a}.bunit .t{min-width:0}.bunit ul.fx{margin:6px 0 0}
+.bchar .crest{width:22px;height:22px;font-size:11px;flex:none}.bchar img.crest.face,.bchar img.crest.full{width:20px;height:43px;object-fit:cover}
+.bchar b{font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bchar select{max-width:170px;min-width:0;background:#0d0b09;border:1px solid var(--line);color:var(--text);padding:3px 4px;border-radius:2px;font:inherit}
+.bchar .bed{background:none;border:1px solid var(--line);color:var(--gold2);border-radius:2px;cursor:pointer;padding:2px 6px;font-size:12px}
+.bres{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px}
+.bres details{border:1px solid var(--line);border-radius:2px;background:#0d0b0966;font-size:12px;padding:3px 6px;min-width:0}
+.bres details.bunit{border-color:#b6e27a55}
+.bres details[open]{grid-column:1/-1;border-color:#b6e27a}
+.bres summary{cursor:pointer;list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bres summary::-webkit-details-marker{display:none}
+.bres summary b{font-weight:500}.bres .bn{color:#c9e39a;font-weight:600}
+.bres ul.fx{margin:4px 0 2px}.bres ul.fx li{font-size:12px}
+.bnone{font-size:12px;align-self:center;grid-column:span 2}
 .bsrc{font-size:11px;color:var(--muted)}
-@media (max-width:900px){.bres{grid-template-columns:1fr}}
+.bbox{border-color:#b6e27a66}
 .saved div.on button.l{color:var(--gold2);font-weight:600}
 .army{display:grid;grid-template-columns:330px minmax(0,1fr) 300px;gap:14px;align-items:start}
 .roster,.ustats{padding:12px;position:sticky;top:70px;max-height:calc(100vh - 90px);overflow:auto;display:grid;gap:8px;align-content:start}
