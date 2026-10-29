@@ -512,9 +512,10 @@ function armyBuffs() {
 // unidades de la lista de reclutamiento que mejorarían: efectos con conjunto de unidades que no alcanzan a todas las de la facción
 function rosterBuffs(R) {
   const ri = raceIdx[D.factions[A.fac].sc], keys = facUnits(D.factions[A.fac].k).map(x => x.u.k), out = new Map();
+  out.spec = [];  // efectos que mejoran a unidades concretas que la facción puede reclutar (estén o no en el ejército)
   for (const x of R.sets.values()) {
     const hit = keys.filter(k => unitHit(x.ei, k, ri));
-    if (hit.length < keys.length) for (const k of hit) out.set(k, (out.get(k) || 0) + 1);
+    if (hit.length < keys.length) { for (const k of hit) out.set(k, (out.get(k) || 0) + 1); if (hit.length) out.spec.push(x); }
   }
   return out;
 }
@@ -574,6 +575,7 @@ function renderBuffs() {
     ${rows ? `<div class="bchars">${rows}</div>` : ""}
     <div class="bres">
       <details class="ball"><summary>Todo el ejército <span class="muted">· ${R.all.size}</span></summary>${R.all.size ? `<ul class="fx">${[...R.all.values()].map(buffLi).join("")}</ul>` : `<p class="empty">Ningún efecto alcanza a todo el ejército.</p>`}</details>
+      ${ROSTER_BUFFED.spec.length ? `<details class="ball"><summary>A unidades concretas <span class="muted">· ${ROSTER_BUFFED.spec.length}</span></summary><p class="muted" style="font-size:12px;margin:2px 0">Las unidades que mejoran brillan en la lista de «Unidades» de la izquierda y en el ejército al añadirlas.</p><ul class="fx">${ROSTER_BUFFED.spec.map(buffLi).join("")}</ul></details>` : ""}
       ${units.length ? units.map(k => { const m = R.per.get(k);
         return `<details class="bunit" data-bu="${k}"><summary><b>${esc(EJ.u[ukIdx[k]].n)}</b></summary><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></details>`; }).join("")
       : `<span class="muted bnone">${R.troops.length ? "Ninguna unidad del ejército recibe mejoras concretas." : "Añade unidades para ver cuáles mejoran."}</span>`}
