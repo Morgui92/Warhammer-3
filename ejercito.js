@@ -258,7 +258,7 @@ function renderRoster() {
       const tags = (u.rr ? `<span class="tag leg">Renombre</span> ` : "") + src.filter(s => s !== "Regimientos de Renombre").map(s => `<span class="tag" title="Formas de conseguirla">${esc(s)}</span> `).join("");
       const can = canAddUnit(u);
       const nb = ROSTER_BUFFED.get(u.k) || 0;
-      return `<div class="rrow${A.sel && A.sel.k === u.k ? " on" : ""}${nb ? " buffed" : ""}" data-su="${u.k}">${unitCard(u.k, "mini")}<span class="t"><b>${esc(u.n)}</b>${nb ? ` <span class="rbf" title="La mejorarían ${nb} ${nb === 1 ? "efecto" : "efectos"} de la facción, el señor y los héroes">▲${nb}</span>` : ""}<br><span class="muted">${u.cost} oro · ${u.up}/turno</span> ${tags}</span>
+      return `<div class="rrow${A.sel && A.sel.k === u.k ? " on" : ""}${nb ? " buffed" : ""}" data-su="${u.k}">${unitCard(u.k, "mini")}<span class="t"><b>${esc(u.n)}</b><br><span class="muted">${u.cost} oro · ${u.up}/turno</span> ${tags}</span>
         <button class="add" data-au="${u.k}" ${can ? "" : "disabled"} aria-label="Añadir ${esc(u.n)}" title="${esc(can ? "Añadir" : whyNot({t: "u", k: u.k}))}">+</button></div>`;
     }).join("")).join("") + (sin.length ? `<details class="sin"><summary class="muted">Unidades de la raza que no he podido ubicar en ninguna facción (${sin.length})</summary><ul>${sin.map(s => `<li>${esc(s)}</li>`).join("")}</ul></details>` : "")
       || `<p class="empty">Nada coincide.</p>`;
@@ -280,8 +280,8 @@ function renderRoster() {
 function slotHtml(it, id, isLord) {
   const st = itemStats(it), name = itemName(it);
   const img = it.t === "u" ? unitCard(it.k) : agentCrest(it.k, true);
-  const nb = it.t === "u" ? BUFFED.get(it.k) || 0 : 0, bb = it.t === "h" && A.builds[id];
-  const badge = nb ? `<span class="bf" title="Mejorada por ${nb} ${nb === 1 ? "efecto" : "efectos"} de las builds">▲${nb}</span>` : bb ? `<span class="bf b" title="Build: ${esc(buildName(it.k, bb))}">✦</span>` : "";
+  const nb = it.t === "u" ? BUFFED.get(it.k) || 0 : 0;
+  const badge = "";  // solo el brillo del marco (Marc, v2.10.2)
   return `<div class="slot${isLord ? " lord" : ""}${nb ? " buffed" : ""}${A.sel && A.sel.id === id ? " on" : ""}" data-sid="${id}" tabindex="0" role="button" aria-label="${esc(name)}">${img}${badge}
     <span class="sn">${esc(name)}</span>${st && st.cost ? (isLord && startLord(it.k) ? `<span class="sc" title="Señor inicial de la facción: no se paga">Inicial</span>` : `<span class="sc">${st.cost}</span>`) : ""}<button class="rm" data-rm="${id}" aria-label="Quitar ${esc(name)}">✕</button></div>`;
 }
@@ -516,7 +516,7 @@ function renderBuffs() {
     <div class="bres">
       <details class="ball"><summary>Todo el ejército <span class="muted">· ${R.all.size}</span></summary>${R.all.size ? `<ul class="fx">${[...R.all.values()].map(buffLi).join("")}</ul>` : `<p class="empty">Ningún efecto alcanza a todo el ejército.</p>`}</details>
       ${units.length ? units.map(k => { const m = R.per.get(k);
-        return `<details class="bunit" data-bu="${k}"><summary><b>${esc(EJ.u[ukIdx[k]].n)}</b> <span class="bn">▲${m.size}</span></summary><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></details>`; }).join("")
+        return `<details class="bunit" data-bu="${k}"><summary><b>${esc(EJ.u[ukIdx[k]].n)}</b></summary><ul class="fx">${[...m.values()].map(buffLi).join("")}</ul></details>`; }).join("")
       : `<span class="muted bnone">${R.troops.length ? "Ninguna unidad del ejército recibe mejoras concretas." : "Añade unidades para ver cuáles mejoran."}</span>`}
     </div>`;
 }
