@@ -113,6 +113,7 @@ function armyFromToken(t) {
   const old = m[1] === "1"; m.splice(1, 1);  // m[1] facción, m[2] señor, m[3] elementos, m[4] casillas, m[5] builds
   const fi = facIdx[m[1]]; if (fi === undefined) return false;
   const f = D.factions[fi], ok = new Set((EJ.f[f.k] || []).map(([i]) => EJ.u[i].k));
+  S.fac = fi;  // la facción de la página (migas «Facciones › …», pestañas) pasa a ser la del ejército
   A.fac = fi; A.lord = facLords(f).includes(m[2]) ? m[2] : null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.builds = {};
   const skipped = [], over = [];
   const raw = m[3] === "_" ? [] : m[3].split("~");
@@ -167,10 +168,22 @@ function saveArmy(asNew) {
   else { A.saveId = newSaveId(); storeArmies([{id: A.saveId, ...b}, ...l].slice(0, 60)); armyMsg("Ejército guardado en este navegador."); }
   renderSaveButtons(); renderSavedArmies();
 }
+// imágenes (retratos, cartas) de la subcultura de la facción fi: se piden si aún no han llegado
+function needFaction(fi) {
+  const sc = D.factions[fi] && D.factions[fi].sc;
+  if (!sc || WH3HAS(sc)) return Promise.resolve();
+  splash(true);
+  return WH3NEED(sc).then(() => { splash(false); thumbByName = null; });
+}
+// un ejército guardado puede ser de otra facción: la página entera pasa a esa facción (migas, lista, imágenes)
 function openSaved(i) {
-  const b = loadArmies()[i]; if (!b || !armyFromToken(b.t)) return;
-  A.saveId = b.id; A.name = b.name; const inp = $("#a-name"); if (inp) inp.value = b.name;
-  renderSaveButtons(); renderSavedArmies();
+  const b = loadArmies()[i]; if (!b) return;
+  const m = /^e[12]\.([a-z0-9_]+)\./i.exec(b.t || ""), fi = m ? facIdx[m[1]] : undefined; if (fi === undefined) return;
+  return needFaction(fi).then(() => {
+    if (!armyFromToken(b.t)) return;
+    A.saveId = b.id; A.name = b.name; const inp = $("#a-name"); if (inp) inp.value = b.name;
+    renderSaveButtons(); renderSavedArmies();
+  });
 }
 function renderSaveButtons() {
   const cur = loadArmies().find(x => x.id === A.saveId), s = $("#a-save");
@@ -185,6 +198,7 @@ function renderSavedArmies() {
 
 // ---------- abrir ----------
 function openArmy(fi) {
+  S.fac = fi;
   if (A.fac !== fi) { A.fac = fi; A.lord = null; A.items = []; A.pos = {}; A.sel = null; A.pick = null; A.name = ""; A.caste = ""; A.q = ""; A.saveId = null; A.builds = {}; }
   renderArmyAll(); show("v-army");
 }
