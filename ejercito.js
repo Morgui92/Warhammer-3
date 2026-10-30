@@ -58,15 +58,19 @@ function countOf(key) { return A.items.filter(it => it.k === key).length; }
 // tope que el juego da por efectos a unidades sin campaign_cap (EJ.cap: p. ej. Lealtad con los caudillos de Tamurkhan)
 const capOf = (u, fk = D.factions[A.fac].k) => u.cap > 0 ? u.cap : ((EJ.cap || {})[fk] || {})[u.k]?.[0] || 0;
 const unitMax = u => u.rr ? 1 : capOf(u) > 0 ? capOf(u) : Infinity;
+// tope por ejército de una vía de reclutamiento (EJ.acap, recruitment_sources.max_per_army: p. ej. 8 Unidades de Caudillo de Tamurkhan)
+const srcCapOf = (k, fk = D.factions[A.fac].k) => ((EJ.acap || {})[fk] || []).find(g => g[2].includes(k));
+const srcCount = g => A.items.filter(it => it.t === "u" && g[2].includes(it.k)).length;
 // texto del límite para la ficha
 function capText(u, fk) {
   const c = ((EJ.cap || {})[fk] || {})[u.k];
-  if (u.cap > 0) return `Límite en campaña: ${u.cap}`;
-  if (c) return `Límite en campaña: ${c[0]} (${c[1].map(([v, t, t2]) => (t2 ? `${t}: ${t2}` : t) + (c[1].length > 1 ? ` +${v}` : "")).join(", ")})`;
+  const g = srcCapOf(u.k, fk), sc = g ? `Tope por ejército: ${g[0]} ${g[1]} en total` : "";
+  if (u.cap > 0) return [`Límite en campaña: ${u.cap}`, sc].filter(Boolean).join("\n");
+  if (c) return [`Límite en campaña: ${c[0]} (${c[1].map(([v, t, t2]) => (t2 ? `${t}: ${t2}` : t) + (c[1].length > 1 ? ` +${v}` : "")).join(", ")})`, sc].filter(Boolean).join("\n");
   if (((EJ.capv || {})[fk] || []).includes(u.k)) return "Límite en campaña: según edificios (sin máximo fijo)";
-  return "";
+  return sc;
 }
-function canAddUnit(u) { return free() > 0 && countOf(u.k) < unitMax(u); }
+function canAddUnit(u) { const g = srcCapOf(u.k); return free() > 0 && countOf(u.k) < unitMax(u) && !(g && srcCount(g) >= g[0]); }
 const charIn = k => A.lord === k || A.items.some(it => it.k === k);
 function canAddHero(k) { return free() > 0 && !(D.agents[k].leg && charIn(k)); }
 // por qué no se puede añadir (texto para el aviso y el botón)
@@ -75,6 +79,8 @@ function whyNot(add) {
   if (add.t === "h" && D.agents[add.k].leg && charIn(add.k)) return `${D.agents[add.k].n} es un personaje legendario: solo puede haber uno.`;
   const u = add.t === "u" && EJ.u[ukIdx[add.k]];
   if (u && countOf(u.k) >= unitMax(u)) return u.rr ? `${u.n} es un Regimiento de Renombre: solo puede haber uno.` : `El juego limita ${u.n} a ${capOf(u)} en campaña.`;
+  const g = u && srcCapOf(u.k);
+  if (g && srcCount(g) >= g[0]) return `El juego permite como máximo ${g[0]} ${g[1]} por ejército.`;
   return free() > 0 ? "" : "No cabe: el ejército ya tiene sus 20 huecos ocupados.";
 }
 // personajes elegibles: los del árbol de habilidades más los que el juego tiene sin árbol (infoL / infoH)
@@ -139,7 +145,7 @@ function armyFromToken(t) {
   }
   renderArmyAll(); show("v-army");
   if (skipped.length || over.length) armyMsg([skipped.length ? `No se han cargado ${skipped.length} elementos que esta facción ya no puede reclutar.` : "",
-    over.length ? `No se han cargado ${over.length} elementos que superaban el límite del juego (legendarios y renombre: uno; unidades con límite en campaña).` : ""].filter(Boolean).join(" "));
+    over.length ? `No se han cargado ${over.length} elementos que superaban el límite del juego (legendarios y renombre: uno; unidades con límite en campaña o tope por ejército).` : ""].filter(Boolean).join(" "));
   return true;
 }
 function armyLink() { return ARTIFACT_URL + "#" + armyToken(); }
@@ -325,6 +331,7 @@ function renderTotals() {
     const u = EJ.u[ukIdx[k]], n = countOf(k);
     if (capOf(u) > 0 && n > capOf(u)) warn.push(`${u.n}: el juego limita esta unidad a ${capOf(u)}`);
   }
+  for (const g of (EJ.acap || {})[D.factions[A.fac].k] || []) if (srcCount(g) > g[0]) warn.push(`${g[1]}: el juego permite como máximo ${g[0]} por ejército`);
   $("#a-totals").innerHTML = `<div><span class="lbl">Huecos</span><b>${used()} / ${ARMY_MAX}</b></div><div><span class="lbl">Reclutamiento</span>${tot(cost, cost0, whyC)}${free0 ? `<small class="muted">Señor inicial: sin coste</small>` : ""}</div><div><span class="lbl">Mantenimiento</span>${tot(up, up0, whyU)}</div>`
     + (warn.length ? `<div class="warn">${warn.map(esc).join("<br>")}</div>` : "");
 }
@@ -374,7 +381,7 @@ function statsHtml(u, head, bf) {
     ${res ? `<div><span class="lbl">Resistencias</span> ${esc(res)}</div>` : ""}
     ${u.at && u.at.length ? `<div><span class="lbl">Atributos</span> ${esc(u.at.join(", "))}</div>` : ""}
     ${u.ab && u.ab.length ? `<div><span class="lbl">Habilidades</span> ${esc(u.ab.join(", "))}</div>` : ""}
-    ${u.lim ? `<div class="muted">${esc(u.lim)}</div>` : ""}
+    ${u.lim ? u.lim.split("\n").map(l => `<div class="muted">${esc(l)}</div>`).join("") : ""}
     ${u.dlc && u.dlc.length ? `<div class="muted">DLC: ${esc(u.dlc.join(", "))}</div>` : ""}
     ${u.d ? `<p class="flav">${esc(u.d)}</p>` : ""}`;
 }
