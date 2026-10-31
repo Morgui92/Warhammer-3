@@ -197,11 +197,17 @@ function renderSaveButtons() {
   const n = $("#a-saveas"); if (n) { n.hidden = !cur; n.title = "Guarda una copia como ejército nuevo; el original no cambia"; }
 }
 function renderSavedArmies() {
-  const l = loadArmies(), el = $("#a-saved"); if (!el) return;
+  const all = loadArmies(), el = $("#a-saved"); if (!el) return;
   // desplegable (con 50 guardados una lista ocuparía demasiado); elegir uno lo abre, ✕ borra el elegido (dos toques)
-  const cur = l.findIndex(b => b.id === A.saveId);
-  el.innerHTML = l.length ? `<div class="ssel"><select id="a-savedsel" aria-label="Mis ejércitos"><option value="">${cur < 0 ? `Abrir un ejército guardado (${l.length})…` : "—"}</option>${l.map((b, i) => `<option value="${i}"${i === cur ? " selected" : ""}>${esc(b.name)} · ${esc(b.fac)} · ${esc(b.when)}</option>`).join("")}</select><button class="x" id="a-savedel" ${cur < 0 ? "disabled" : ""} title="Borrar el ejército elegido" aria-label="Borrar">✕</button></div>`
-    : `<span class="empty">Aún no has guardado ningún ejército.</span>`;
+  // solo los ejércitos cuyo señor puede jugar la facción elegida (Marc, v2.12.10); sin señor: los de esta misma facción
+  const f = D.factions[A.fac], lords = new Set(f ? facLords(f) : []);
+  const l = all.map((b, i) => [b, i]).filter(([b]) => {
+    const m = /^e[12]\.([a-z0-9_]+)\.([a-z0-9_]+)\./i.exec(b.t || ""); if (!m || !f) return false;
+    return m[2] === "_" ? m[1] === f.k : lords.has(m[2]);
+  });
+  const cur = l.findIndex(([b]) => b.id === A.saveId);
+  el.innerHTML = l.length ? `<div class="ssel"><select id="a-savedsel" aria-label="Mis ejércitos"><option value="">${cur < 0 ? `Abrir un ejército guardado (${l.length})…` : "—"}</option>${l.map(([b, i], j) => `<option value="${i}"${j === cur ? " selected" : ""}>${esc(b.name)} · ${esc(b.fac)} · ${esc(b.when)}</option>`).join("")}</select><button class="x" id="a-savedel" ${cur < 0 ? "disabled" : ""} title="Borrar el ejército elegido" aria-label="Borrar">✕</button></div>`
+    : `<span class="empty">${all.length ? "Aún no has guardado ningún ejército para esta facción." : "Aún no has guardado ningún ejército."}</span>`;
 }
 
 // ---------- abrir ----------
