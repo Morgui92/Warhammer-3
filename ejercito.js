@@ -199,12 +199,9 @@ function renderSaveButtons() {
 function renderSavedArmies() {
   const all = loadArmies(), el = $("#a-saved"); if (!el) return;
   // desplegable (con 50 guardados una lista ocuparía demasiado); elegir uno lo abre, ✕ borra el elegido (dos toques)
-  // solo los ejércitos cuyo señor puede jugar la facción elegida (Marc, v2.12.10); sin señor: los de esta misma facción
-  const f = D.factions[A.fac], lords = new Set(f ? facLords(f) : []);
-  const l = all.map((b, i) => [b, i]).filter(([b]) => {
-    const m = /^e[12]\.([a-z0-9_]+)\.([a-z0-9_]+)\./i.exec(b.t || ""); if (!m || !f) return false;
-    return m[2] === "_" ? m[1] === f.k : lords.has(m[2]);
-  });
+  // solo los ejércitos guardados con la facción elegida: en otra cambian los buffos, señores y héroes (Marc, v2.12.11)
+  const f = D.factions[A.fac];
+  const l = all.map((b, i) => [b, i]).filter(([b]) => { const m = /^e[12]\.([a-z0-9_]+)\./i.exec(b.t || ""); return !!(m && f && m[1] === f.k); });
   const cur = l.findIndex(([b]) => b.id === A.saveId);
   el.innerHTML = l.length ? `<div class="ssel"><select id="a-savedsel" aria-label="Mis ejércitos"><option value="">${cur < 0 ? `Abrir un ejército guardado (${l.length})…` : "—"}</option>${l.map(([b, i], j) => `<option value="${i}"${j === cur ? " selected" : ""}>${esc(b.name)} · ${esc(b.fac)} · ${esc(b.when)}</option>`).join("")}</select><button class="x" id="a-savedel" ${cur < 0 ? "disabled" : ""} title="Borrar el ejército elegido" aria-label="Borrar">✕</button></div>`
     : `<span class="empty">${all.length ? "Aún no has guardado ningún ejército para esta facción." : "Aún no has guardado ningún ejército."}</span>`;
@@ -491,7 +488,9 @@ function unitHit(ei, key, ri) {
 // builds guardadas pasadas a esta facción (caché por token)
 const convCache = new Map();
 function savedFor(k) {
-  return loadSaved().map((b, i) => ({b, i})).filter(({b}) => { const p = parseToken(b.t); return p && p.agent === k; }).map(x => {
+  // solo las builds de este personaje guardadas con la facción del ejército (Marc, v2.12.11)
+  const fk = D.factions[A.fac] && D.factions[A.fac].k;
+  return loadSaved().map((b, i) => ({b, i})).filter(({b}) => { const p = parseToken(b.t); return p && p.agent === k && p.fk === fk; }).map(x => {
     const ck = x.b.t + "|" + A.fac; if (!convCache.has(ck)) convCache.set(ck, buildForFaction(x.b.t, A.fac));
     return {...x, c: convCache.get(ck)};
   }).filter(x => x.c);
