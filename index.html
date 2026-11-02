@@ -292,6 +292,13 @@ main>section:not([hidden]){animation:rise .32s var(--ease) both}
 .card .n{transition:color .2s}.card:hover .n{color:var(--gold3)}
 #races img.crest{width:60px;height:60px;transition:transform .25s var(--ease)}
 #races .card:hover img.crest{transform:scale(1.06) rotate(-2deg)}
+/* v2.13: primera pantalla con las razas; al elegir una salen solo sus facciones */
+.vfac-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.vfac-h h1{margin:0}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.rgrid .card{min-height:92px}
+#races .rgrid img.crest{width:68px;height:68px}
+.card .mini{display:flex;gap:3px;margin-top:5px;flex-wrap:wrap}
+.card .mini img,.card .mini span{width:20px;height:20px;border-radius:2px;object-fit:contain;opacity:.85;font-size:9px;display:inline-grid;place-items:center}
 .card.info:hover{box-shadow:inset 0 1px 0 #ffffff0f;border-color:#4f412f}.card.info::after{display:none}
 /* pestañas: indicador dorado */
 .tabs{gap:2px;border-bottom-color:#4f412f}
@@ -340,6 +347,11 @@ ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
   details.fxd>summary::before{content:"";width:7px;height:7px;transform:rotate(45deg);border:solid var(--gold);border-width:0 2px 2px 0;transition:transform .2s}
   details.fxd[open]>summary::before{transform:rotate(-135deg)}
   #races img.crest{width:50px;height:50px}
+  .rgrid{grid-template-columns:1fr 1fr;gap:8px}
+  .rgrid .card{flex-direction:column;text-align:center;padding:10px 6px;min-height:0;gap:6px}
+  #races .rgrid img.crest{width:56px;height:56px}
+  .rgrid .card .n{font-size:16px}.rgrid .card .mini{justify-content:center}
+  .vfac-h{gap:8px}.vfac-h h1{font-size:24px}
   .tabs{overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
   .tabs button{font-size:16px;padding:8px 11px;white-space:nowrap;flex:none}
   .fhead h1+.muted{margin-top:-4px;font-size:14px}
@@ -394,7 +406,7 @@ ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
   <!-- pestañas de la facción también dentro del árbol y del ejército, para volver sin pasar por las migas -->
   <nav class="tabs fnav" id="fnav" role="tablist" aria-label="Facción" hidden></nav>
   <section id="v-fac">
-    <h1>Elige facción</h1>
+    <div class="vfac-h"><button class="btn ghost" id="back-races" hidden>← Volver a razas</button><h1 id="vfac-t">Elige raza</h1></div>
     <div class="search"><input id="q" type="search" placeholder="Buscar facción, raza, señor o héroe…" autocomplete="off"><span class="muted" id="qcount"></span></div>
     <div id="races"></div>
   </section>
@@ -452,7 +464,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.12.12";
+const SIM_VERSION = "2.13";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -603,7 +615,7 @@ function abilityHtml(ai) {
 }
 
 // ---------- estado ----------
-const S = {fac: null, tab: "lords", agent: null, rank: 1, lv: [], sel: -1, hover: -1, tree: null, trait: -1};
+const S = {race: null, fac: null, tab: "lords", agent: null, rank: 1, lv: [], sel: -1, hover: -1, tree: null, trait: -1};
 
 function treeFor(agentKey, fi) {
   const a = D.agents[agentKey], T = D.trees[a.tree], f = D.factions[fi], ri = raceIdx[f.sc];
@@ -740,6 +752,8 @@ function shareLink() { return (ARTIFACT_URL || "") + "#" + token(); }
 
 // ---------- vistas ----------
 function show(id) {
+  if (S.fac !== null && D.factions[S.fac]) S.race = D.factions[S.fac].race;  // las migas y «volver» llevan a la raza de la facción abierta
+  if (id === "v-fac") renderFactions();
   for (const v of ["v-fac", "v-char", "v-tree", "v-army"]) $("#" + v).hidden = v !== id; crumbs(id); renderFnav(id); window.scrollTo(0, 0);
   if (id === "v-tree" && S.tree) { drawLinks(); placeRowLabels(); }  // las medidas solo existen con la vista visible
 }
@@ -755,7 +769,8 @@ $("#fnav").addEventListener("click", e => {
   if (b.dataset.ft === "army") openArmy(S.fac); else { S.tab = b.dataset.ft; openFaction(S.fac); }
 });
 function crumbs(view) {
-  const c = [`<button data-go="fac">Facciones</button>`];
+  const c = [`<button data-go="races">Razas</button>`];
+  if (S.race) c.push(`<span class="sep">›</span>`, view === "v-fac" ? `<span>${esc(S.race)}</span>` : `<button data-go="fac">${esc(S.race)}</button>`);
   if (view !== "v-fac" && S.fac !== null) c.push(`<span class="sep">›</span>`, view === "v-char" ? `<span>${esc(D.factions[S.fac].n)}</span>` : `<button data-go="char">${esc(D.factions[S.fac].n)}</button>`);
   if (view === "v-tree" && S.agent) c.push(`<span class="sep">›</span><span>${esc(D.agents[S.agent].n)}</span>`);
   if (view === "v-army") c.push(`<span class="sep">›</span><span>Ejército</span>`);
@@ -763,22 +778,42 @@ function crumbs(view) {
 }
 $("#crumbs").addEventListener("click", e => {
   const g = e.target.dataset.go; if (!g) return;
-  if (g === "fac") { S.fac = null; show("v-fac"); } else openFaction(S.fac);
+  if (g === "races") { S.fac = null; pickRace(null); }
+  else if (g === "fac") { S.fac = null; pickRace(S.race); } else openFaction(S.fac);
 });
 
+// v2.13: sin búsqueda y sin raza elegida se ven las razas; con raza, solo sus facciones; al buscar, todas las que coincidan
+function pickRace(r) {
+  S.race = r; $("#q").value = ""; show("v-fac");
+}
 function renderFactions() {
   const q = fold($("#q").value.trim());  // sin tildes ni mayúsculas, como el buscador de la cabecera
   const groups = new Map(); let count = 0;
   D.factions.forEach((f, fi) => {
+    if (!q && S.race && f.race !== S.race) return;
     const names = [...f.lords, ...f.heroes].map(k => D.agents[k].n);
     const hay = fold(f.n + " " + f.race + " " + names.join(" "));
     if (q && !hay.includes(q)) return;
     if (!groups.has(f.race)) groups.set(f.race, []);
     groups.get(f.race).push(fi); count++;
   });
+  const races = !q && !S.race;
+  $("#vfac-t").textContent = races ? "Elige raza" : !q ? S.race : "Elige facción";
+  $("#back-races").hidden = races || (!!q && !S.race);
+  $("#q").placeholder = races ? "Buscar raza, facción, señor o héroe…" : "Buscar facción, raza, señor o héroe…";
+  const sorted = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  if (races) {
+    $("#qcount").textContent = `${groups.size} razas · ${count} facciones`;
+    $("#races").innerHTML = `<div class="rgrid">${sorted.map(([race, list]) => {
+      list.sort(byOrd); const f0 = D.factions[list[0]];
+      const mini = list.length > 1 ? `<span class="mini">${list.slice(1).map(fi => facCrest(D.factions[fi])).join("")}</span>` : "";
+      return `<button class="card" data-r="${esc(race)}">${facCrest(f0)}<span class="t"><span class="n">${esc(race)}</span><br><span class="s">${list.length} ${list.length === 1 ? "facción" : "facciones"}</span>${mini}</span></button>`;
+    }).join("")}</div>`;
+    return;
+  }
   $("#qcount").textContent = `${count} facciones`;
-  $("#races").innerHTML = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([race, list]) => `
-    <div class="race"><h2>${esc(race)}</h2><div class="grid">${list.sort(byOrd).map(fi => {
+  $("#races").innerHTML = sorted.map(([race, list]) => `
+    <div class="race">${q || !S.race ? `<h2>${esc(race)}</h2>` : ""}<div class="grid">${list.sort(byOrd).map(fi => {
       const f = D.factions[fi], ll = f.ll.filter(k => D.agents[k]).map(k => D.agents[k].n).join(", ");
       return `<button class="card" data-f="${fi}">${facCrest(f)}<span class="t"><span class="n">${esc(f.n)}</span><br><span class="s">${esc(ll)}<br>${f.lords.length} Señores · ${f.heroes.length} Héroes</span></span></button>`;
     }).join("")}</div></div>`).join("") || `<p class="empty">Nada coincide con “${esc(q)}”.</p>`;
@@ -786,7 +821,11 @@ function renderFactions() {
 // dentro de cada raza, el orden de la pantalla de selección de campaña del juego (frontend_factions.sort_order)
 function byOrd(a, b) { const x = D.factions[a], y = D.factions[b]; return (x.ord ?? 1e9) - (y.ord ?? 1e9) || x.n.localeCompare(y.n); }
 $("#q").addEventListener("input", renderFactions);
-$("#races").addEventListener("click", e => { const b = e.target.closest("[data-f]"); if (b) openFaction(+b.dataset.f); });
+$("#races").addEventListener("click", e => {
+  const r = e.target.closest("[data-r]"); if (r) { pickRace(r.dataset.r); return; }
+  const b = e.target.closest("[data-f]"); if (b) openFaction(+b.dataset.f);
+});
+$("#back-races").addEventListener("click", () => pickRace(null));
 
 function bundleSplit(bk) {
   const b = D.bundles[bk]; if (!b) return {fac: [], lord: [], b: null};
