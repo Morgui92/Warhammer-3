@@ -295,10 +295,14 @@ main>section:not([hidden]){animation:rise .32s var(--ease) both}
 /* v2.13: primera pantalla con las razas; al elegir una salen solo sus facciones */
 .vfac-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.vfac-h h1{margin:0}
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-.rgrid .card{min-height:92px}
-#races .rgrid img.crest{width:68px;height:68px}
-.card .mini{display:flex;gap:3px;margin-top:5px;flex-wrap:wrap}
-#races .card .mini .crest,#races .rgrid .card:hover .mini img.crest{width:24px;height:24px;border-width:1px;font-size:10px;transform:none;opacity:.85;filter:drop-shadow(0 1px 1px #000)}
+.rcard{flex-direction:column;align-items:stretch;gap:0;padding:0}
+.rcard .rban{position:relative;display:block;height:86px;background:center/cover no-repeat;border-bottom:1px solid #4f412f;transition:filter .25s var(--ease)}
+.rcard .rban::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,#1d1814e6);pointer-events:none}
+.rcard .rban.sin{display:grid;place-items:center;background:radial-gradient(ellipse at 50% 40%,#3a2d20,#15110d 75%)}
+#races .rcard .rban.sin img.crest{width:64px;height:64px}
+.rcard:hover .rban{filter:brightness(1.12) saturate(1.1)}
+.rcard .t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:8px 12px 10px}
+.rcard .n{font-size:19px}
 .card.info:hover{box-shadow:inset 0 1px 0 #ffffff0f;border-color:#4f412f}.card.info::after{display:none}
 /* pestañas: indicador dorado */
 .tabs{gap:2px;border-bottom-color:#4f412f}
@@ -348,10 +352,10 @@ ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
   details.fxd[open]>summary::before{transform:rotate(-135deg)}
   #races img.crest{width:50px;height:50px}
   .rgrid{grid-template-columns:1fr 1fr;gap:8px}
-  .rgrid .card{flex-direction:column;text-align:center;padding:10px 6px;min-height:0;gap:6px}
-  #races .rgrid img.crest{width:56px;height:56px}
-  #races .card .mini .crest{width:22px;height:22px}
-  .rgrid .card .n{font-size:16px}.rgrid .card .mini{justify-content:center}
+  .rcard .rban{height:58px}
+  #races .rcard .rban.sin img.crest{width:46px;height:46px}
+  .rcard .t{flex-direction:column;gap:0;padding:6px 8px 8px}
+  .rcard .n{font-size:15px}
   .vfac-h{gap:8px}.vfac-h h1{font-size:24px}
   .tabs{overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
   .tabs button{font-size:16px;padding:8px 11px;white-space:nowrap;flex:none}
@@ -443,6 +447,7 @@ ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
 
 <script src="i18n.js"></script><!-- carga datos(_es).js y ejercitos(_es).js según el idioma -->
 <script src="escudos.js"></script>
+<script src="razas.js"></script><!-- estandartes de raza (arte de cada cultura del juego) -->
 <script src="carga.js"></script><!-- retratos, cartas e iconos: se cargan por subcultura desde img/ -->
 <script src="iconos.js"></script>
 <script src="monturas.js"></script><!-- monturas de las habilidades y sus estadísticas (hoja del personaje) -->
@@ -465,7 +470,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.13";
+const SIM_VERSION = "2.13.1";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -513,6 +518,7 @@ const svgIcon = n => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICO
 function hashCol(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return `hsl(${Math.abs(h) % 360} 45% 32%)`; }
 function facColor(f) { return f.col ? "#" + f.col.replace("#", "") : hashCol(f.sc); }
 const ESCUDOS = window.WH3ESCUDOS || {};
+const RAZAS = window.WH3RAZAS || {};  // estandartes de raza por subcultura (v2.13.1)
 function facCrest(f) { return ESCUDOS[f.k] ? `<img class="crest" src="${ESCUDOS[f.k]}" alt="">` : `<span class="crest" style="background:${facColor(f)}">${esc(initials(f.n))}</span>`; }
 const RETRATOS = window.WH3RETRATOS || {img: [], a: {}};
 function agentCrest(k, full) { const a = D.agents[k], i = RETRATOS.a[k]; return i !== undefined ? `<img class="crest ${full ? "full" : "face"}${a.leg ? " leg" : ""}" src="${RETRATOS.img[i]}" alt="">` : `<span class="crest${a.leg ? "" : " com"}" style="background:${a.leg ? "#6b4a1a" : "#2e3a40"}">${esc(initials(a.n))}</span>`; }
@@ -807,8 +813,9 @@ function renderFactions() {
     $("#qcount").textContent = `${groups.size} razas · ${count} facciones`;
     $("#races").innerHTML = `<div class="rgrid">${sorted.map(([race, list]) => {
       list.sort(byOrd); const f0 = D.factions[list[0]];
-      const mini = list.length > 1 ? `<span class="mini">${list.slice(1).map(fi => facCrest(D.factions[fi])).join("")}</span>` : "";
-      return `<button class="card" data-r="${esc(race)}">${facCrest(f0)}<span class="t"><span class="n">${esc(race)}</span><br><span class="s">${list.length} ${list.length === 1 ? "facción" : "facciones"}</span>${mini}</span></button>`;
+      // estandarte de la raza (arte de la cultura del juego, razas.js); sin él, el escudo de la facción principal
+      const ban = RAZAS[f0.sc] ? `<span class="rban" style="background-image:url('${RAZAS[f0.sc]}')"></span>` : `<span class="rban sin">${facCrest(f0)}</span>`;
+      return `<button class="card rcard" data-r="${esc(race)}">${ban}<span class="t"><span class="n">${esc(race)}</span><span class="s">${list.length} ${list.length === 1 ? "facción" : "facciones"}</span></span></button>`;
     }).join("")}</div>`;
     return;
   }
