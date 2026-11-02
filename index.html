@@ -298,7 +298,7 @@ main>section:not([hidden]){animation:rise .32s var(--ease) both}
 .rgrid .card{min-height:92px}
 #races .rgrid img.crest{width:68px;height:68px}
 .card .mini{display:flex;gap:3px;margin-top:5px;flex-wrap:wrap}
-.card .mini img,.card .mini span{width:20px;height:20px;border-radius:2px;object-fit:contain;opacity:.85;font-size:9px;display:inline-grid;place-items:center}
+#races .card .mini .crest,#races .rgrid .card:hover .mini img.crest{width:24px;height:24px;border-width:1px;font-size:10px;transform:none;opacity:.85;filter:drop-shadow(0 1px 1px #000)}
 .card.info:hover{box-shadow:inset 0 1px 0 #ffffff0f;border-color:#4f412f}.card.info::after{display:none}
 /* pestañas: indicador dorado */
 .tabs{gap:2px;border-bottom-color:#4f412f}
@@ -350,6 +350,7 @@ ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
   .rgrid{grid-template-columns:1fr 1fr;gap:8px}
   .rgrid .card{flex-direction:column;text-align:center;padding:10px 6px;min-height:0;gap:6px}
   #races .rgrid img.crest{width:56px;height:56px}
+  #races .card .mini .crest{width:22px;height:22px}
   .rgrid .card .n{font-size:16px}.rgrid .card .mini{justify-content:center}
   .vfac-h{gap:8px}.vfac-h h1{font-size:24px}
   .tabs{overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
@@ -811,7 +812,7 @@ function renderFactions() {
     }).join("")}</div>`;
     return;
   }
-  $("#qcount").textContent = `${count} facciones`;
+  $("#qcount").textContent = count === 1 ? "1 facción" : `${count} facciones`;
   $("#races").innerHTML = sorted.map(([race, list]) => `
     <div class="race">${q || !S.race ? `<h2>${esc(race)}</h2>` : ""}<div class="grid">${list.sort(byOrd).map(fi => {
       const f = D.factions[fi], ll = f.ll.filter(k => D.agents[k]).map(k => D.agents[k].n).join(", ");
