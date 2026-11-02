@@ -295,14 +295,16 @@ main>section:not([hidden]){animation:rise .32s var(--ease) both}
 /* v2.13: primera pantalla con las razas; al elegir una salen solo sus facciones */
 .vfac-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.vfac-h h1{margin:0}
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-.rcard{flex-direction:column;align-items:stretch;gap:0;padding:0}
-.rcard .rban{position:relative;display:block;height:86px;background:center/cover no-repeat;border-bottom:1px solid #4f412f;transition:filter .25s var(--ease)}
-.rcard .rban::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,#1d1814e6);pointer-events:none}
-.rcard .rban.sin{display:grid;place-items:center;background:radial-gradient(ellipse at 50% 40%,#3a2d20,#15110d 75%)}
-#races .rcard .rban.sin img.crest{width:64px;height:64px}
-.rcard:hover .rban{filter:brightness(1.12) saturate(1.1)}
-.rcard .t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:8px 12px 10px}
-.rcard .n{font-size:19px}
+/* v2.13.2: cada raza es su imagen de la pantalla de selección de raza del juego (600x100, nombre sobre el fundido) */
+.rgrid{grid-template-columns:repeat(auto-fill,minmax(min(400px,100%),1fr))}
+.rcard{position:relative;display:block;aspect-ratio:6/1;min-height:64px;padding:0;background:#15110d center right/cover no-repeat}
+.rcard .rban{position:absolute;inset:0;background:inherit;background-size:cover;transition:filter .25s var(--ease),transform .4s var(--ease)}
+.rcard:hover .rban{filter:brightness(1.15) saturate(1.1);transform:scale(1.03)}
+.rcard .rban.sin{display:grid;place-items:center start;padding-left:14px;background:radial-gradient(ellipse at 80% 50%,#3a2d20,#15110d 75%)}
+#races .rcard .rban.sin img.crest{width:52px;height:52px}
+.rcard .t{position:absolute;left:0;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;padding:0 16px;max-width:48%;text-shadow:0 1px 3px #000,0 0 10px #000}
+.rcard .n{font-size:21px;line-height:1.05}
+.rcard .s{color:#cdbf9f}
 .card.info:hover{box-shadow:inset 0 1px 0 #ffffff0f;border-color:#4f412f}.card.info::after{display:none}
 /* pestañas: indicador dorado */
 .tabs{gap:2px;border-bottom-color:#4f412f}
@@ -352,10 +354,9 @@ ul.fx li::before{color:var(--gold);text-shadow:0 0 6px #c9a45c88}
   details.fxd[open]>summary::before{transform:rotate(-135deg)}
   #races img.crest{width:50px;height:50px}
   .rgrid{grid-template-columns:1fr 1fr;gap:8px}
-  .rcard .rban{height:58px}
-  #races .rcard .rban.sin img.crest{width:46px;height:46px}
-  .rcard .t{flex-direction:column;gap:0;padding:6px 8px 8px}
-  .rcard .n{font-size:15px}
+  .rgrid{grid-template-columns:minmax(0,1fr)}.rcard{min-height:0}
+  .rcard .t{padding:0 12px;max-width:52%}
+  .rcard .n{font-size:18px}
   .vfac-h{gap:8px}.vfac-h h1{font-size:24px}
   .tabs{overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
   .tabs button{font-size:16px;padding:8px 11px;white-space:nowrap;flex:none}
@@ -470,7 +471,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.13.1";
+const SIM_VERSION = "2.13.2";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -814,7 +815,7 @@ function renderFactions() {
     $("#races").innerHTML = `<div class="rgrid">${sorted.map(([race, list]) => {
       list.sort(byOrd); const f0 = D.factions[list[0]];
       // estandarte de la raza (arte de la cultura del juego, razas.js); sin él, el escudo de la facción principal
-      const ban = RAZAS[f0.sc] ? `<span class="rban" style="background-image:url('${RAZAS[f0.sc]}')"></span>` : `<span class="rban sin">${facCrest(f0)}</span>`;
+      const ban = RAZAS[f0.sc] ? `<span class="rban" style="background-image:url('${RAZAS[f0.sc]}')"></span>` : `<span class="rban sin"></span>`;
       return `<button class="card rcard" data-r="${esc(race)}">${ban}<span class="t"><span class="n">${esc(race)}</span><span class="s">${list.length} ${list.length === 1 ? "facción" : "facciones"}</span></span></button>`;
     }).join("")}</div>`;
     return;
