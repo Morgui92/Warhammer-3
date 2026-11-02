@@ -471,7 +471,7 @@ const raceIdx = Object.fromEntries(D.races.map((r, i) => [r.k, i]));
 const facIdx = Object.fromEntries(D.factions.map((f, i) => [f.k, i]));
 const FACTION_SCOPE = /^faction_to_(faction|region|province|settlement|military_force_faction)|^faction_to_.*_unseen$/;
 // Versión del simulador: subirla en cada publicación (v2.0 = árbol con el aspecto del juego)
-const SIM_VERSION = "2.13.2";
+const SIM_VERSION = "2.13.3";
 $("#patch").textContent = "Simulador v" + SIM_VERSION + " · Parche " + D.meta.parche;
 
 // ---------- iconos (el volcado no incluye imágenes del juego) ----------
@@ -690,7 +690,18 @@ function rankReq(n, level) {
   return r || 0;
 }
 const maxLv = n => SK(n.s).lv.length;
-const isAuto = n => SK(n.s).auto > 0;
+// Habilidades que suben solas con el nivel (character_skills_to_level_reached_criterias): [[nivel, punto], ...].
+// Pueden tener varias filas: Soldados de renombre da el punto 1 a nivel 10, el 2 a nivel 20 y el 3 a nivel 30.
+const autoSteps = s => Array.isArray(s.auto) ? s.auto : s.auto > 0 ? [[s.auto, 1]] : [];
+const isAuto = n => autoSteps(SK(n.s)).length > 0;
+// puntos que el personaje ya trae al crearse (points_on_creation); no cuestan puntos ni se pueden quitar
+const pocLv = n => Math.min(n.poc || 0, maxLv(n));
+// nivel gratis de una habilidad automática con el nivel actual del personaje
+function autoLv(n, rank = S.rank) {
+  let l = pocLv(n);
+  for (const [r, u] of autoSteps(SK(n.s))) if (rank >= r) l = Math.max(l, u);
+  return Math.min(l, maxLv(n));
+}
 function prereq(j) {
   const n = S.tree.vis[j];
   for (const p of n.req_all) if (!(S.lv[p] > 0)) return false;
@@ -712,7 +723,7 @@ function lockedBy(j) {
 // El nivel sigue a los puntos: nivel R da R-1 puntos, así que nivel = 1 + puntos gastados, hasta el máximo del personaje (50)
 const maxRank = () => S.tree.a.maxr || 50;
 const pointsTotal = () => maxRank() - 1;
-const spent = () => S.tree.vis.reduce((t, n, j) => t + (isAuto(n) ? 0 : S.lv[j] || 0), 0);
+const spent = () => S.tree.vis.reduce((t, n, j) => t + (isAuto(n) ? 0 : Math.max(0, (S.lv[j] || 0) - pocLv(n))), 0);
 const syncRank = () => { S.rank = Math.min(maxRank(), 1 + spent()); };
 const nextRank = () => Math.min(maxRank(), spent() + 2);  // nivel que tendría el personaje con un punto más
 function canAdd(j) {
@@ -723,22 +734,23 @@ function canAdd(j) {
   return spent() < pointsTotal();
 }
 function applyAuto() {
-  S.tree.vis.forEach((n, j) => { if (isAuto(n)) S.lv[j] = S.rank >= SK(n.s).auto ? 1 : 0; });
+  S.tree.vis.forEach((n, j) => { S.lv[j] = isAuto(n) ? autoLv(n) : Math.max(S.lv[j] || 0, pocLv(n)); });
 }
 function validate() {
   for (let guard = 0; guard < 200; guard++) {
     syncRank(); applyAuto();
     let changed = false;
     S.tree.vis.forEach((n, j) => {
-      if (isAuto(n) || !(S.lv[j] > 0)) return;
-      if (!prereq(j) || lockedBy(j) >= 0) { S.lv[j] = 0; changed = true; return; }
-      while (S.lv[j] > 0 && S.rank < rankReq(n, S.lv[j])) { S.lv[j]--; changed = true; }
+      const b = pocLv(n);
+      if (isAuto(n) || !(S.lv[j] > b)) return;
+      if (!prereq(j) || lockedBy(j) >= 0) { S.lv[j] = b; changed = true; return; }
+      while (S.lv[j] > b && S.rank < rankReq(n, S.lv[j])) { S.lv[j]--; changed = true; }
     });
     if (!changed) break;
   }
 }
 function add(j) { if (canAdd(j)) { S.lv[j] = (S.lv[j] || 0) + 1; validate(); changed(); } }
-function remove(j) { if (S.lv[j] > 0 && !isAuto(S.tree.vis[j])) { S.lv[j]--; validate(); changed(); } }
+function remove(j) { if (S.lv[j] > pocLv(S.tree.vis[j]) && !isAuto(S.tree.vis[j])) { S.lv[j]--; validate(); changed(); } }
 
 // ---------- token de build (solo letras, dígitos, . _ ~ - para que viaje en el enlace) ----------
 const B36 = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -1277,7 +1289,7 @@ function renderTree() {
     return `<button class="${cls}" data-j="${j}" style="left:${X(n)}px;top:${Y(n)}px;--c:${gray ? "#8c8c8c" : col}" aria-label="${esc(name)} ${l}/${m}">
       <span class="pl"></span><span class="orn"></span>${skIconHtml(s, gray ? "#8c8c8c" : col, "ic")}
       <span class="nm${sz}">${esc(name)}</span><span class="lvs">${dots}</span>
-      ${l > 0 ? `<span class="ck"></span>` : ""}${/norank/.test(cls) ? `<span class="pad"></span><span class="rq" title="Nivel necesario">${nextR}</span>` : ""}${/excl/.test(cls) ? `<span class="chn"></span>` : ""}${isAuto(n) ? `<span class="au" title="Gratis al llegar al nivel ${s.auto}"></span>` : ""}${needPts}</button>`;
+      ${l > 0 ? `<span class="ck"></span>` : ""}${/norank/.test(cls) ? `<span class="pad"></span><span class="rq" title="Nivel necesario">${nextR}</span>` : ""}${/excl/.test(cls) ? `<span class="chn"></span>` : ""}${isAuto(n) ? `<span class="au" title="Gratis al llegar al nivel ${autoSteps(s)[0][0]}"></span>` : ""}${needPts}</button>`;
   }).join("");
   const labs = labels.map((L, i) => {
     if (!L.lab) return "";
@@ -1303,7 +1315,12 @@ function reqList(j) {
   const lb = lockedBy(j);
   if (lb >= 0) reqs.push(`<div class="no">✘ Bloqueada por haber elegido ${esc(SK(S.tree.vis[lb].s).n)}</div>`);
   else if (n.locks.length) reqs.push(`<div class="muted">Excluyente con: ${esc([...new Set(n.locks.map(([sk]) => { const x = S.tree.vis.find(v => v.s === sk); return x ? SK(x.s).n : ""; }).filter(Boolean))].join(", "))}</div>`);
-  if (isAuto(n)) reqs.push(`<div class="${S.rank >= s.auto ? "ok" : "no"}">Se obtiene gratis al llegar al nivel ${s.auto}</div>`);
+  if (pocLv(n) > 0) reqs.push(`<div class="ok">El personaje la tiene desde que se crea</div>`);
+  if (isAuto(n)) {
+    const st = autoSteps(s);
+    if (st.length === 1 && st[0][1] === 1) reqs.push(`<div class="${S.rank >= st[0][0] ? "ok" : "no"}">Se obtiene gratis al llegar al nivel ${st[0][0]}</div>`);
+    else for (const [r, u] of st) reqs.push(`<div class="${S.rank >= r ? "ok" : "no"}">Punto ${u} gratis al llegar al nivel ${r}</div>`);
+  }
   else if (l < m) { const r = rankReq(n, l + 1); if (r > 1) reqs.push(`<div class="${nextRank() >= r ? "ok" : "no"}">${nextRank() >= r ? "✔" : "✘"} Requiere nivel ${r}</div>`); }
   if (n.anc) reqs.push(`<div class="muted">Necesita un objeto o misión para desbloquearse en campaña</div>`);
   return reqs;
@@ -1324,7 +1341,7 @@ function tipHtml(j) {
     ${s.d ? `<p class="fl">${esc(s.d)}</p>` : ""}${L && L.d && L.d !== s.d ? `<p class="fl">${esc(L.d)}</p>` : ""}${ef || sp ? ef + (ef ? "" : sp) : `<div class="ef"><span class="dot"></span><span>Sin efectos visibles</span></div>`}
     ${us.length && window.unitThumb ? `<div class="ut">Las siguientes unidades recibirán bonificaciones de esta habilidad:</div><div class="uc">${us.slice(0, 20).map(([u, ix]) => window.unitThumb(ix).replace("<img", `<img title="${esc(u)}"`)).join("")}${us.length > 20 ? `<span class="more">y ${us.length - 20} más</span>` : ""}</div>` : ""}
     ${reqs.length ? `<div class="rq">${reqs.join("")}</div>` : ""}
-    <div class="hint">${canAdd(j) ? "Clic: añadir punto" : ""}${canAdd(j) && l && !isAuto(n) ? " · " : ""}${l && !isAuto(n) ? "Clic derecho: quitar" : ""}</div>`;
+    <div class="hint">${canAdd(j) ? "Clic: añadir punto" : ""}${canAdd(j) && l > pocLv(n) && !isAuto(n) ? " · " : ""}${l > pocLv(n) && !isAuto(n) ? "Clic derecho: quitar" : ""}</div>`;
 }
 const tip = document.createElement("div"); tip.className = "gtt"; tip.hidden = true; tip.setAttribute("role", "tooltip"); document.body.appendChild(tip);
 function showTip(j) {
@@ -1495,7 +1512,7 @@ function renderDetail(hj) {
   }).join("");
   el.innerHTML = `<div class="hd"><span class="dico">${skIconHtml(s, "#" + cat.col, "")}</span><div style="min-width:0"><h3>${esc(s.n)}</h3><div class="muted">${esc(cat.n)} · ${l}/${m} puntos</div></div></div>
     ${s.d ? `<p class="flav">${esc(s.d)}</p>` : ""}
-    <div class="btns"><button class="btn" id="d-add" ${canAdd(j) ? "" : "disabled"}>+ Añadir punto</button><button class="btn ghost" id="d-rem" ${l > 0 && !isAuto(n) ? "" : "disabled"}>− Quitar punto</button></div>
+    <div class="btns"><button class="btn" id="d-add" ${canAdd(j) ? "" : "disabled"}>+ Añadir punto</button><button class="btn ghost" id="d-rem" ${l > pocLv(n) && !isAuto(n) ? "" : "disabled"}>− Quitar punto</button></div>
     ${reqs.length ? `<div class="req">${reqs.join("")}</div>` : ""}
     ${sp.html}
     <div class="lvls">${levels}</div>`;
